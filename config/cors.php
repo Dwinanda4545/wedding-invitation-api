@@ -1,13 +1,19 @@
 <?php
 
+$defaultOrigins = 'http://localhost:5173,http://127.0.0.1:5173';
+
+$allowedOrigins = array_values(array_filter(array_map(
+    static fn (string $origin): string => rtrim(trim($origin), '/'),
+    explode(',', (string) env('CORS_ALLOWED_ORIGINS', $defaultOrigins)),
+)));
+
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login'], // Add 'login' here
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout'],
     'allowed_methods' => ['*'],
-    'allowed_origins' => ['http://localhost:5173'], // Your Vite URL
+    'allowed_origins' => $allowedOrigins,
     'allowed_origins_patterns' => [],
     'allowed_headers' => ['*'],
     'exposed_headers' => [],
     'max_age' => 0,
-    'supports_credentials' => true, // THIS MUST BE TRUE
+    'supports_credentials' => true,
 ];
-
