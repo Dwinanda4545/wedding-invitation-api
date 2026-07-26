@@ -24,9 +24,9 @@ Route::post('/invitation/{secret_token}/wishes', [InvitationWishController::clas
     ->where('secret_token', '[A-Za-z0-9]+');
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout']);
 
 Route::middleware('auth:sanctum')->group(function () {
-    Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
     Route::get('/events', [EventController::class, 'index']);
