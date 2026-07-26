@@ -1,0 +1,4 @@
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/sank9295/public_html/api.wedding-invitation.sanadwi.my.id/
+    - /bin/cp -R * $DEPLOYPATH
