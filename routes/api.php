@@ -1,0 +1,78 @@
+<?php
+
+use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CheckInController;
+use App\Http\Controllers\Api\EventController;
+use App\Http\Controllers\Api\EventDecorController;
+use App\Http\Controllers\Api\EventGalleryController;
+use App\Http\Controllers\Api\EventInvitationController;
+use App\Http\Controllers\Api\EventMusicController;
+use App\Http\Controllers\Api\EventScheduleController;
+use App\Http\Controllers\Api\GuestController;
+use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\InvitationThemeController;
+use App\Http\Controllers\Api\InvitationWishController;
+use App\Http\Controllers\Api\LoveStoryController;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/health', fn () => ['ok' => true]);
+
+Route::get('/invitation/{secret_token}', [InvitationController::class, 'show'])
+    ->where('secret_token', '[A-Za-z0-9]+');
+
+Route::post('/invitation/{secret_token}/wishes', [InvitationWishController::class, 'store'])
+    ->where('secret_token', '[A-Za-z0-9]+');
+
+Route::post('/login', [AuthController::class, 'login']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [AuthController::class, 'me']);
+
+    Route::get('/events', [EventController::class, 'index']);
+    Route::post('/events', [EventController::class, 'store']);
+    Route::get('/events/{event}', [EventController::class, 'show']);
+    Route::put('/events/{event}', [EventController::class, 'update']);
+    Route::patch('/events/{event}', [EventController::class, 'update']);
+    Route::delete('/events/{event}', [EventController::class, 'destroy']);
+
+    Route::get('/events/{event}/invitation', [EventInvitationController::class, 'show']);
+    Route::put('/events/{event}/invitation', [EventInvitationController::class, 'update']);
+    Route::patch('/events/{event}/invitation', [EventInvitationController::class, 'update']);
+
+    Route::post('/events/{event}/schedules', [EventScheduleController::class, 'store']);
+    Route::put('/events/{event}/schedules/{schedule}', [EventScheduleController::class, 'update']);
+    Route::patch('/events/{event}/schedules/{schedule}', [EventScheduleController::class, 'update']);
+    Route::delete('/events/{event}/schedules/{schedule}', [EventScheduleController::class, 'destroy']);
+
+    Route::post('/events/{event}/love-stories', [LoveStoryController::class, 'store']);
+    Route::put('/events/{event}/love-stories/{loveStory}', [LoveStoryController::class, 'update']);
+    Route::patch('/events/{event}/love-stories/{loveStory}', [LoveStoryController::class, 'update']);
+    Route::delete('/events/{event}/love-stories/{loveStory}', [LoveStoryController::class, 'destroy']);
+
+    Route::post('/events/{event}/gallery', [EventGalleryController::class, 'store']);
+    Route::delete('/events/{event}/gallery/{galleryImage}', [EventGalleryController::class, 'destroy']);
+
+    Route::post('/events/{event}/music', [EventMusicController::class, 'store']);
+
+    Route::post('/events/{event}/decor', [EventDecorController::class, 'store']);
+    Route::delete('/events/{event}/decor/{filename}', [EventDecorController::class, 'destroy']);
+
+    Route::get('/events/{event}/guests', [GuestController::class, 'index']);
+    Route::post('/events/{event}/guests', [GuestController::class, 'store']);
+    Route::get('/events/{event}/guests/{guest}', [GuestController::class, 'show']);
+    Route::put('/events/{event}/guests/{guest}', [GuestController::class, 'update']);
+    Route::patch('/events/{event}/guests/{guest}', [GuestController::class, 'update']);
+    Route::delete('/events/{event}/guests/{guest}', [GuestController::class, 'destroy']);
+
+    Route::post('/events/{event}/guests/import', [GuestController::class, 'import']);
+    Route::post('/events/{event}/guests/{guest}/qr/regenerate', [GuestController::class, 'regenerateQr']);
+
+    Route::post('/check-in', [CheckInController::class, 'store']);
+
+    Route::get('/invitation-themes', [InvitationThemeController::class, 'index']);
+    Route::post('/invitation-themes', [InvitationThemeController::class, 'store']);
+    Route::put('/invitation-themes/{invitationTheme}', [InvitationThemeController::class, 'update']);
+    Route::patch('/invitation-themes/{invitationTheme}', [InvitationThemeController::class, 'update']);
+    Route::delete('/invitation-themes/{invitationTheme}', [InvitationThemeController::class, 'destroy']);
+});
