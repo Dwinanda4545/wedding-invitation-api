@@ -33,10 +33,11 @@ class InvitationController extends Controller
                 'phone_number' => $guest->phone_number,
                 'guest_type' => $guest->guest_type,
                 'secret_token' => $guest->secret_token,
-                'qr_code_url' => $guest->qr_code_path
+                'qr_code_url' => (! $guest->is_attended && $guest->qr_code_path)
                     ? Storage::disk('public')->url($guest->qr_code_path)
                     : null,
-                'is_attended' => $guest->is_attended,
+                'is_attended' => (bool) $guest->is_attended,
+                'scanned_at' => $guest->scanned_at,
             ],
             'event' => [
                 'id' => $event->id,
