@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\SectionCustomSanitizer;
 use Illuminate\Foundation\Http\FormRequest;
 
 class EventInvitationUpdateRequest extends FormRequest
@@ -28,5 +29,19 @@ class EventInvitationUpdateRequest extends FormRequest
             'hosts.groom_side' => ['sometimes', 'nullable', 'array'],
             'hosts.bride_side' => ['sometimes', 'nullable', 'array'],
         ];
+    }
+
+    public function passedValidation(): void
+    {
+        $settings = $this->input('invitation_settings');
+        if (! is_array($settings)) {
+            return;
+        }
+
+        $settings['section_custom'] = SectionCustomSanitizer::sanitize(
+            $settings['section_custom'] ?? [],
+        );
+
+        $this->merge(['invitation_settings' => $settings]);
     }
 }
