@@ -14,9 +14,16 @@ class EventGalleryStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'image' => ['required', 'image', 'max:2048'],
+            'image' => ['required', 'image', 'max:20480'],
             'caption' => ['nullable', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'image.max' => 'Ukuran foto galeri maksimal 20MB.',
         ];
     }
 }
