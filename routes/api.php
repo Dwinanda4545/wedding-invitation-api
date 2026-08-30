@@ -22,6 +22,8 @@ Route::get('/invitation/{secret_token}', [InvitationController::class, 'show'])
 
 Route::post('/invitation/{secret_token}/wishes', [InvitationWishController::class, 'store'])
     ->where('secret_token', '[A-Za-z0-9]+');
+Route::patch('/invitation/{secret_token}/wishes', [InvitationWishController::class, 'update'])
+    ->where('secret_token', '[A-Za-z0-9]+');
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout']);

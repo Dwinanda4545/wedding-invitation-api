@@ -23,6 +23,11 @@ class Guest extends Model
         return $this->belongsTo(Event::class);
     }
 
+    public function wishes()
+    {
+        return $this->hasMany(InvitationWish::class);
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Guest $guest) {

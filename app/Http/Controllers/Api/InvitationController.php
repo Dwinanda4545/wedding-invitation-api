@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Guest;
+use App\Models\InvitationWish;
 use Illuminate\Support\Facades\Storage;
 
 class InvitationController extends Controller
@@ -38,6 +39,7 @@ class InvitationController extends Controller
                     : null,
                 'is_attended' => (bool) $guest->is_attended,
                 'scanned_at' => $guest->scanned_at,
+                'wish' => $this->guestWishPayload($guest),
             ],
             'event' => [
                 'id' => $event->id,
@@ -85,5 +87,26 @@ class InvitationController extends Controller
                 ]),
             ],
         ]);
+    }
+
+    private function guestWishPayload(Guest $guest): ?array
+    {
+        $wish = InvitationWish::query()
+            ->where('event_id', $guest->event_id)
+            ->where('guest_id', $guest->id)
+            ->latest()
+            ->first();
+
+        if (! $wish) {
+            return null;
+        }
+
+        return [
+            'id' => $wish->id,
+            'guest_name' => $wish->guest_name,
+            'message' => $wish->message,
+            'rsvp_status' => $wish->rsvp_status,
+            'created_at' => $wish->created_at,
+        ];
     }
 }
