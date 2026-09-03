@@ -56,4 +56,9 @@ class Event extends Model
     {
         return $this->hasMany(InvitationWish::class)->latest();
     }
+
+    public function envelopeTransactions()
+    {
+        return $this->hasMany(EnvelopeTransaction::class)->latest();
+    }
 }

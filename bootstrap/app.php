@@ -16,6 +16,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // Enable first-party SPA authentication via Sanctum cookies.
         $middleware->statefulApi();
 
+        $middleware->validateCsrfTokens(except: [
+            'api/duitku/callback',
+        ]);
+
         // Keep default API throttling enabled.
         $middleware->throttleApi();
 
