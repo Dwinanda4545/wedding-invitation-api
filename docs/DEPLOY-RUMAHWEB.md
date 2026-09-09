@@ -73,12 +73,17 @@ php artisan storage:link
 
 Repo: `wedding-invitation-api` → branch `main`
 
-File `.cpanel.yml` sudah diset. Setelah push ke GitHub:
+File `.cpanel.yml` sudah diset (ringan: copy kode + `migrate`, **tanpa** `composer install` tiap deploy). Setelah push ke GitHub:
 
-1. cPanel → **Git Version Control** → Pull / Deploy
-2. Atau aktifkan **Automatic Deployment** pada repo
+1. cPanel → **Git Version Control** → **Update from Remote**
+2. Lalu **Deploy HEAD Commit** (bukan hanya pull)
+3. Atau aktifkan **Automatic Deployment** pada repo
 
-**Penting:** File `.env` **tidak** ikut git — buat manual sekali di server.
+**Penting:**
+- File `.env` **tidak** ikut git — buat manual sekali di server.
+- Folder `vendor/` di server dipertahankan. Hanya jalankan `composer install --no-dev` (via Terminal/support) jika `composer.json` / dependensi berubah.
+- Jika Deploy tetap **queued**/gagal: update manual (File Manager + phpMyAdmin SQL) — lihat troubleshooting di bawah.
+- Setelah ganti `DOKU_*` di `.env`, hapus `bootstrap/cache/config.php` lewat File Manager jika config lama masih terpakai.
 
 ### A6. Verifikasi API
 
@@ -193,6 +198,7 @@ https://api.wedding-invitation.sanadwi.my.id/api/doku/notification
 | 503 amplop | DOKU Client ID / Secret Key kosong atau salah |
 | Webhook tidak update status | URL webhook di DOKU ≠ `/api/doku/notification`; harus HTTPS publik |
 | Refresh 404 di React | Tambah `.htaccess` SPA di frontend |
+| Deploy Git stuck **queued** | Batal antrian, Deploy ulang; atau update manual File Manager + SQL migrate. `.cpanel.yml` sudah tanpa `composer install` |
 
 ---
 
