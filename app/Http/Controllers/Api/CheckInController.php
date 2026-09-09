@@ -2,23 +2,37 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\GuestAttendanceUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CheckInRequest;
+use App\Models\Event;
 use App\Models\Guest;
 
 class CheckInController extends Controller
 {
     public function store(CheckInRequest $request)
     {
+        $user = $request->user();
+        $eventId = (int) $request->validated('event_id');
+        $event = Event::query()->find($eventId);
+
+        if (! $event || ! $user?->canAccessEvent($event)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak memiliki akses ke acara ini.',
+            ], 403);
+        }
+
         $guest = Guest::query()
             ->where('secret_token', $request->validated('secret_token'))
+            ->where('event_id', $event->id)
             ->with('event')
             ->first();
 
         if (! $guest) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid QR code',
+                'message' => 'QR tidak valid untuk acara ini',
             ], 404);
         }
 
@@ -39,6 +53,8 @@ class CheckInController extends Controller
             'is_attended' => true,
             'scanned_at' => now(),
         ])->save();
+
+        event(new GuestAttendanceUpdated($guest));
 
         return response()->json([
             'success' => true,

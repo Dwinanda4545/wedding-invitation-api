@@ -202,6 +202,37 @@ https://api.wedding-invitation.sanadwi.my.id/api/doku/notification
 
 ---
 
+## Bagian E — Role Admin / Panitia & Buku Tamu
+
+Setelah migration `2026_09_10_040000_add_roles_and_event_user_table`:
+
+1. User existing otomatis `role=admin`
+2. Admin membuat panitia di menu **Users** atau tombol **Panitia** per acara
+3. Panitia hanya melihat **Scan Check-in** + **Buku Tamu** untuk acara assigned
+
+### Pusher (realtime Buku Tamu)
+
+Di `.env` API:
+
+```env
+BROADCAST_CONNECTION=pusher
+PUSHER_APP_ID=
+PUSHER_APP_KEY=
+PUSHER_APP_SECRET=
+PUSHER_APP_CLUSTER=ap1
+```
+
+Di build frontend (`.env.production`):
+
+```env
+VITE_PUSHER_APP_KEY=
+VITE_PUSHER_APP_CLUSTER=ap1
+```
+
+Setelah ubah env API, hapus `bootstrap/cache/config.php` lewat File Manager lalu Deploy ulang (atau tunggu cache clear dari `.cpanel.yml`).
+
+---
+
 ## Nanti go-live DOKU (uang real)
 
 1. Aktifkan akun production di DOKU Dashboard
