@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\DigitalEnvelopeStoreRequest;
 use App\Models\EnvelopeTransaction;
 use App\Models\Guest;
-use App\Services\DuitkuService;
+use App\Services\DokuService;
 use App\Support\EnvelopeSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
@@ -14,7 +14,7 @@ use RuntimeException;
 
 class DigitalEnvelopeController extends Controller
 {
-    public function __construct(private readonly DuitkuService $duitku) {}
+    public function __construct(private readonly DokuService $doku) {}
 
     public function store(DigitalEnvelopeStoreRequest $request, string $secret_token): JsonResponse
     {
@@ -48,15 +48,19 @@ class DigitalEnvelopeController extends Controller
         ]);
 
         try {
-            $paymentUrl = $this->duitku->createTransaction($transaction, $guest);
+            $paymentUrl = $this->doku->createTransaction($transaction, $guest);
         } catch (RuntimeException $e) {
             $transaction->update(['status' => 'failed']);
 
+            report($e);
+
             return response()->json([
                 'message' => 'Payment service unavailable',
+                'detail' => config('app.debug') ? $e->getMessage() : null,
             ], 503);
         }
 
+        $transaction->refresh();
         $transaction->update(['payment_url' => $paymentUrl]);
 
         return response()->json([

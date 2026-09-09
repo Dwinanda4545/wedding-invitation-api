@@ -18,6 +18,7 @@ class SectionCustomSanitizer
         'gallery',
         'wishes',
         'hosts',
+        'digital_envelope',
     ];
 
     public static function isHttpsUrl(string $src): bool

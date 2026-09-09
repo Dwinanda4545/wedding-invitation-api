@@ -5,13 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\EnvelopeTransaction;
 use App\Models\Event;
+use App\Services\DokuService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class EventEnvelopeController extends Controller
 {
+    public function __construct(private readonly DokuService $doku) {}
+
     public function index(Request $request, Event $event): JsonResponse
     {
+        $synced = 0;
+        if ($request->boolean('sync', true)) {
+            $synced = $this->doku->syncPendingForEvent($event->id);
+        }
+
         $perPage = min(100, max(1, (int) $request->input('per_page', 20)));
 
         $query = EnvelopeTransaction::query()
@@ -30,6 +38,7 @@ class EventEnvelopeController extends Controller
                 'paid_count' => (int) (clone $summaryQuery)->paid()->count(),
                 'pending_count' => (int) (clone $summaryQuery)->where('status', 'pending')->count(),
             ],
+            'synced' => $synced,
             'data' => collect($paginator->items())->map(fn (EnvelopeTransaction $tx) => [
                 'id' => $tx->id,
                 'sender_name' => $tx->sender_name,

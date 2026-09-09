@@ -6,8 +6,9 @@ use App\Models\EnvelopeTransaction;
 use App\Models\Event;
 use App\Models\Guest;
 use App\Models\User;
-use App\Services\DuitkuService;
+use App\Services\DokuService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class DigitalEnvelopeTest extends TestCase
@@ -19,10 +20,11 @@ class DigitalEnvelopeTest extends TestCase
         parent::setUp();
 
         config([
-            'duitku.merchant_code' => 'D1234',
-            'duitku.api_key' => 'test-api-key',
-            'duitku.callback_url' => 'http://localhost/api/duitku/callback',
-            'duitku.frontend_url' => 'http://localhost:5173',
+            'doku.client_id' => 'MCH-TEST-CLIENT',
+            'doku.secret_key' => 'test-secret-key',
+            'doku.frontend_url' => 'http://localhost:5173',
+            'doku.base_url' => 'https://api-sandbox.doku.com',
+            'doku.notification_path' => '/api/doku/notification',
         ]);
     }
 
@@ -58,10 +60,10 @@ class DigitalEnvelopeTest extends TestCase
     {
         ['guest' => $guest] = $this->enabledGuest();
 
-        $this->mock(DuitkuService::class, function ($mock) {
+        $this->mock(DokuService::class, function ($mock) {
             $mock->shouldReceive('createTransaction')
                 ->once()
-                ->andReturn('https://sandbox.duitku.com/pay/example');
+                ->andReturn('https://sandbox.doku.com/checkout/example');
         });
 
         $this->postJson("/api/invitation/{$guest->secret_token}/digital-envelopes", [
@@ -70,7 +72,7 @@ class DigitalEnvelopeTest extends TestCase
             'message' => 'Selamat menempuh hidup baru',
         ])
             ->assertCreated()
-            ->assertJsonPath('data.payment_url', 'https://sandbox.duitku.com/pay/example')
+            ->assertJsonPath('data.payment_url', 'https://sandbox.doku.com/checkout/example')
             ->assertJsonPath('data.amount', 100000)
             ->assertJsonPath('data.status', 'pending');
 
@@ -117,7 +119,7 @@ class DigitalEnvelopeTest extends TestCase
         ])->assertForbidden();
     }
 
-    public function test_callback_updates_status_to_paid(): void
+    public function test_notification_updates_status_to_paid(): void
     {
         ['event' => $event, 'guest' => $guest] = $this->enabledGuest();
 
@@ -130,28 +132,44 @@ class DigitalEnvelopeTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $merchantCode = 'D1234';
-        $amount = '100000';
-        $orderId = $transaction->order_id;
-        $signature = md5($merchantCode.$amount.$orderId.'test-api-key');
+        $payload = [
+            'order' => [
+                'invoice_number' => $transaction->order_id,
+                'amount' => 100000,
+            ],
+            'transaction' => [
+                'status' => 'SUCCESS',
+                'original_request_id' => 'req-123',
+            ],
+            'channel' => [
+                'id' => 'VIRTUAL_ACCOUNT',
+            ],
+        ];
 
-        $this->post('/api/duitku/callback', [
-            'merchantCode' => $merchantCode,
-            'amount' => $amount,
-            'merchantOrderId' => $orderId,
-            'resultCode' => '00',
-            'reference' => 'REF123',
-            'paymentCode' => 'QRIS',
-            'signature' => $signature,
-        ])->assertOk();
+        $rawBody = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        $headers = $this->dokuNotificationHeaders($rawBody);
+
+        $this->call(
+            'POST',
+            '/api/doku/notification',
+            [],
+            [],
+            [],
+            $this->transformHeadersToServerVars(array_merge([
+                'CONTENT_TYPE' => 'application/json',
+                'Accept' => 'application/json',
+            ], $headers)),
+            $rawBody,
+        )->assertOk();
 
         $transaction->refresh();
         $this->assertSame('paid', $transaction->status);
         $this->assertNotNull($transaction->paid_at);
-        $this->assertSame('QRIS', $transaction->payment_method);
+        $this->assertSame('VIRTUAL_ACCOUNT', $transaction->payment_method);
+        $this->assertSame('req-123', $transaction->payment_reference);
     }
 
-    public function test_callback_rejects_invalid_signature(): void
+    public function test_notification_rejects_invalid_signature(): void
     {
         ['event' => $event, 'guest' => $guest] = $this->enabledGuest();
 
@@ -164,16 +182,31 @@ class DigitalEnvelopeTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $this->post('/api/duitku/callback', [
-            'merchantCode' => 'D1234',
-            'amount' => '100000',
-            'merchantOrderId' => 'ENV-1-BADSIG',
-            'resultCode' => '00',
-            'signature' => 'invalid',
-        ])->assertForbidden();
+        $payload = [
+            'order' => ['invoice_number' => 'ENV-1-BADSIG'],
+            'transaction' => ['status' => 'SUCCESS'],
+        ];
+        $rawBody = json_encode($payload);
+
+        $this->call(
+            'POST',
+            '/api/doku/notification',
+            [],
+            [],
+            [],
+            $this->transformHeadersToServerVars([
+                'CONTENT_TYPE' => 'application/json',
+                'Accept' => 'application/json',
+                'Client-Id' => 'MCH-TEST-CLIENT',
+                'Request-Id' => 'abc',
+                'Request-Timestamp' => gmdate('Y-m-d\TH:i:s\Z'),
+                'Signature' => 'HMACSHA256=invalid',
+            ]),
+            $rawBody,
+        )->assertForbidden();
     }
 
-    public function test_callback_is_idempotent(): void
+    public function test_notification_is_idempotent(): void
     {
         ['event' => $event, 'guest' => $guest] = $this->enabledGuest();
 
@@ -187,24 +220,79 @@ class DigitalEnvelopeTest extends TestCase
             'paid_at' => now(),
         ]);
 
-        $merchantCode = 'D1234';
-        $amount = '100000';
-        $orderId = $transaction->order_id;
-        $signature = md5($merchantCode.$amount.$orderId.'test-api-key');
+        $payload = [
+            'order' => ['invoice_number' => $transaction->order_id],
+            'transaction' => ['status' => 'SUCCESS'],
+        ];
+        $rawBody = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        $headers = $this->dokuNotificationHeaders($rawBody);
 
-        $this->post('/api/duitku/callback', [
-            'merchantCode' => $merchantCode,
-            'amount' => $amount,
-            'merchantOrderId' => $orderId,
-            'resultCode' => '00',
-            'signature' => $signature,
-        ])->assertOk();
+        $this->call(
+            'POST',
+            '/api/doku/notification',
+            [],
+            [],
+            [],
+            $this->transformHeadersToServerVars(array_merge([
+                'CONTENT_TYPE' => 'application/json',
+                'Accept' => 'application/json',
+            ], $headers)),
+            $rawBody,
+        )->assertOk();
 
         $this->assertSame('paid', $transaction->fresh()->status);
     }
 
+    public function test_admin_list_syncs_paid_status_from_doku(): void
+    {
+        ['event' => $event, 'guest' => $guest] = $this->enabledGuest();
+        $user = User::factory()->create();
+
+        $transaction = EnvelopeTransaction::query()->create([
+            'event_id' => $event->id,
+            'guest_id' => $guest->id,
+            'sender_name' => 'Budi',
+            'amount' => 100000,
+            'order_id' => 'ENV-1-SYNC-PAID',
+            'status' => 'pending',
+        ]);
+
+        Http::fake(function (\Illuminate\Http\Client\Request $request) use ($transaction) {
+            if (! str_contains($request->url(), '/orders/v1/status/')) {
+                return Http::response(['message' => 'unexpected '.$request->url()], 500);
+            }
+
+            return Http::response([
+                'order' => ['invoice_number' => $transaction->order_id],
+                'transaction' => [
+                    'status' => 'SUCCESS',
+                    'original_request_id' => 'DOKU-SYNC-REF',
+                ],
+                'channel' => ['id' => 'QRIS'],
+            ], 200);
+        });
+
+        $this->actingAs($user)
+            ->getJson("/api/events/{$event->id}/envelope-transactions")
+            ->assertOk()
+            ->assertJsonPath('synced', 1)
+            ->assertJsonPath('summary.paid_count', 1)
+            ->assertJsonPath('summary.pending_count', 0)
+            ->assertJsonPath('data.0.status', 'paid');
+
+        $this->assertSame('paid', $transaction->fresh()->status);
+        $this->assertSame('DOKU-SYNC-REF', $transaction->fresh()->payment_reference);
+        $this->assertNotNull($transaction->fresh()->paid_at);
+    }
+
     public function test_admin_can_list_transactions(): void
     {
+        Http::fake([
+            '*/orders/v1/status/*' => Http::response([
+                'transaction' => ['status' => 'PENDING'],
+            ], 200),
+        ]);
+
         ['event' => $event, 'guest' => $guest] = $this->enabledGuest();
         $user = User::factory()->create();
 
@@ -257,5 +345,31 @@ class DigitalEnvelopeTest extends TestCase
         $this->assertArrayNotHasKey('envelope_transactions', $payload['event'] ?? []);
         $this->assertArrayNotHasKey('envelope_transactions', $payload['guest'] ?? []);
         $this->assertStringNotContainsString('ENV-1-PUBLIC', json_encode($payload));
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function dokuNotificationHeaders(string $rawBody): array
+    {
+        $clientId = 'MCH-TEST-CLIENT';
+        $requestId = 'notif-req-1';
+        $timestamp = gmdate('Y-m-d\TH:i:s\Z');
+        $digest = base64_encode(hash('sha256', $rawBody, true));
+        $component = implode("\n", [
+            'Client-Id:'.$clientId,
+            'Request-Id:'.$requestId,
+            'Request-Timestamp:'.$timestamp,
+            'Request-Target:/api/doku/notification',
+            'Digest:'.$digest,
+        ]);
+        $signature = 'HMACSHA256='.base64_encode(hash_hmac('sha256', $component, 'test-secret-key', true));
+
+        return [
+            'Client-Id' => $clientId,
+            'Request-Id' => $requestId,
+            'Request-Timestamp' => $timestamp,
+            'Signature' => $signature,
+        ];
     }
 }

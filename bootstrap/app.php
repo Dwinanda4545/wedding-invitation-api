@@ -16,8 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // Enable first-party SPA authentication via Sanctum cookies.
         $middleware->statefulApi();
 
+        // Public invitation endpoints authenticate via secret_token in the URL,
+        // not the SPA session — CSRF would break cross-origin local setups
+        // (Vite localhost → Laragon *.test) where XSRF cookies are not shared.
         $middleware->validateCsrfTokens(except: [
-            'api/duitku/callback',
+            'api/doku/notification',
+            'api/invitation/*',
         ]);
 
         // Keep default API throttling enabled.

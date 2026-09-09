@@ -29,7 +29,7 @@ class DigitalEnvelopeStoreRequest extends FormRequest
 
         return [
             'sender_name' => ['required', 'string', 'max:255'],
-            'sender_email' => ['nullable', 'email', 'max:255'],
+            'sender_email' => ['nullable', 'email', 'max:50'],
             'sender_phone' => ['nullable', 'string', 'max:20'],
             'amount' => ['required', 'integer', 'min:'.$min, 'max:'.$max],
             'message' => ['nullable', 'string', 'max:2000'],

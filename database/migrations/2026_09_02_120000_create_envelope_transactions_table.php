@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('payment_method')->nullable();
             $table->enum('status', ['pending', 'paid', 'expired', 'failed'])->default('pending');
             $table->text('payment_url')->nullable();
-            $table->string('duitku_reference')->nullable();
+            $table->string('payment_reference')->nullable();
             $table->timestamp('paid_at')->nullable();
             $table->timestamps();
 

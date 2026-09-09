@@ -2,7 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CheckInController;
-use App\Http\Controllers\Api\DuitkuCallbackController;
+use App\Http\Controllers\Api\DokuNotificationController;
 use App\Http\Controllers\Api\DigitalEnvelopeController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\EventEnvelopeController;
@@ -32,7 +32,7 @@ Route::post('/invitation/{secret_token}/digital-envelopes', [DigitalEnvelopeCont
     ->middleware('throttle:10,1')
     ->where('secret_token', '[A-Za-z0-9]+');
 
-Route::post('/duitku/callback', [DuitkuCallbackController::class, 'handle']);
+Route::post('/doku/notification', [DokuNotificationController::class, 'handle']);
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout']);

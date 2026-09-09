@@ -20,7 +20,7 @@ class EnvelopeTransaction extends Model
         'payment_method',
         'status',
         'payment_url',
-        'duitku_reference',
+        'payment_reference',
         'paid_at',
     ];
 

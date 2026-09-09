@@ -28,6 +28,22 @@ class SectionCustomSanitizerTest extends TestCase
         $this->assertSame('<h1>Hi</h1>', $clean['couple']['html']);
     }
 
+    public function test_allows_digital_envelope_key(): void
+    {
+        $clean = SectionCustomSanitizer::sanitize([
+            'digital_envelope' => [
+                'mode' => 'custom',
+                'html' => '<form id="env-form"></form>',
+                'css' => '',
+                'js' => 'invitation.createEnvelope({amount:10000})',
+                'libraries' => [],
+            ],
+        ]);
+
+        $this->assertSame('custom', $clean['digital_envelope']['mode']);
+        $this->assertStringContainsString('env-form', $clean['digital_envelope']['html']);
+    }
+
     public function test_strips_non_https_libraries_and_keeps_https(): void
     {
         $clean = SectionCustomSanitizer::sanitize([

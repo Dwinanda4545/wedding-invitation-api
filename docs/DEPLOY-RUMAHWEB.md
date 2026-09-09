@@ -1,4 +1,4 @@
-# Deploy ke Rumahweb (Production + Duitku Sandbox)
+# Deploy ke Rumahweb (Production + DOKU Sandbox)
 
 Domain yang dipakai project ini:
 
@@ -7,7 +7,7 @@ Domain yang dipakai project ini:
 | Frontend (React) | `https://wedding-invitation.sanadwi.my.id` |
 | Backend (Laravel API) | `https://api.wedding-invitation.sanadwi.my.id` |
 
-Pembayaran amplop digital tetap **Duitku Sandbox** (`DUITKU_SANDBOX=true`) — aman untuk tes di server live tanpa uang real.
+Pembayaran amplop digital memakai **DOKU Checkout** (`DOKU_SANDBOX=true`) — tamu memilih metode di halaman DOKU; aman untuk tes tanpa uang real.
 
 ---
 
@@ -41,8 +41,8 @@ php artisan key:generate   # jika APP_KEY masih kosong
 | `APP_URL` | `https://api.wedding-invitation.sanadwi.my.id` |
 | `FRONTEND_URL` | `https://wedding-invitation.sanadwi.my.id` |
 | `DB_*` | dari cPanel → MySQL Databases |
-| `DUITKU_*` | Merchant Code + API Key dari **sandbox.duitku.com** |
-| `DUITKU_CALLBACK_URL` | `https://api.wedding-invitation.sanadwi.my.id/api/duitku/callback` |
+| `DOKU_*` | Client ID + Secret Key dari **DOKU Dashboard** (sandbox) |
+| Webhook URL | `https://api.wedding-invitation.sanadwi.my.id/api/doku/notification` |
 
 ### A3. Database
 
@@ -139,18 +139,18 @@ Tanpa ini, refresh halaman `/admin/events` akan 404.
 
 ---
 
-## Bagian C — Duitku Sandbox di Production
+## Bagian C — DOKU Sandbox di Production
 
-1. Login [https://sandbox.duitku.com](https://sandbox.duitku.com)
-2. **My Project** → buat/edit project
-3. **Callback URL** (wajib sama persis):
+1. Login [DOKU Dashboard](https://dashboard.doku.com) (mode sandbox)
+2. Ambil **Client ID** + **Secret Key**
+3. Settings → **Webhook** → set Notification URL:
 
 ```
-https://api.wedding-invitation.sanadwi.my.id/api/duitku/callback
+https://api.wedding-invitation.sanadwi.my.id/api/doku/notification
 ```
 
-4. Copy **Merchant Code** + **API Key** sandbox ke `.env` server API
-5. Pastikan `DUITKU_SANDBOX=true`
+4. Copy kredensial ke `.env` server API
+5. Pastikan `DOKU_SANDBOX=true`
 
 ### Aktifkan amplop di admin
 
@@ -160,8 +160,8 @@ https://api.wedding-invitation.sanadwi.my.id/api/duitku/callback
 ### Tes pembayaran
 
 1. Buka link undangan tamu
-2. Isi form amplop → redirect ke halaman bayar Duitku **sandbox**
-3. Selesaikan pembayaran tes
+2. Isi form amplop → redirect ke halaman bayar DOKU **sandbox**
+3. Selesaikan pembayaran tes (simulator DOKU)
 4. Cek status di Admin → Acara → **Amplop**
 
 ---
@@ -170,13 +170,13 @@ https://api.wedding-invitation.sanadwi.my.id/api/duitku/callback
 
 ```
 ☐ Document root API → .../public
-☐ .env production di server (APP_KEY, DB, Duitku sandbox)
+☐ .env production di server (APP_KEY, DB, DOKU sandbox)
 ☐ php artisan migrate --force
 ☐ php artisan storage:link
 ☐ /api/health → ok
 ☐ Frontend dist/ ter-upload + .htaccess SPA
 ☐ Login admin berhasil (Sanctum cookie)
-☐ Callback URL terdaftar di Duitku sandbox
+☐ Webhook URL terdaftar di DOKU Dashboard
 ☐ Section Amplop Digital enabled
 ☐ Tes 1 transaksi amplop end-to-end
 ```
@@ -190,23 +190,22 @@ https://api.wedding-invitation.sanadwi.my.id/api/duitku/callback
 | 500 API | Cek `storage/logs/laravel.log`, permission storage |
 | CORS error | `CORS_ALLOWED_ORIGINS` = URL frontend exact (https, no trailing slash) |
 | Login gagal / 419 CSRF | `SANCTUM_STATEFUL_DOMAINS`, `SESSION_DOMAIN`, HTTPS |
-| 503 amplop | Duitku key salah atau kosong |
-| Callback tidak update status | Callback URL di Duitku ≠ `.env`; harus HTTPS publik |
+| 503 amplop | DOKU Client ID / Secret Key kosong atau salah |
+| Webhook tidak update status | URL webhook di DOKU ≠ `/api/doku/notification`; harus HTTPS publik |
 | Refresh 404 di React | Tambah `.htaccess` SPA di frontend |
 
 ---
 
-## Nanti go-live Duitku (uang real)
+## Nanti go-live DOKU (uang real)
 
-1. Verifikasi akun di [passport.duitku.com](https://passport.duitku.com)
-2. Buat project **production**
-3. Update `.env`:
+1. Aktifkan akun production di DOKU Dashboard
+2. Update `.env`:
 
 ```env
-DUITKU_SANDBOX=false
-DUITKU_MERCHANT_CODE=...
-DUITKU_API_KEY=...
-DUITKU_CALLBACK_URL=https://api.wedding-invitation.sanadwi.my.id/api/duitku/callback
+DOKU_SANDBOX=false
+DOKU_CLIENT_ID=...
+DOKU_SECRET_KEY=...
+DOKU_NOTIFICATION_PATH=/api/doku/notification
 ```
 
-4. `php artisan config:clear && php artisan config:cache`
+3. `php artisan config:clear && php artisan config:cache`
