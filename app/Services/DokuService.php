@@ -19,14 +19,17 @@ class DokuService
 
         $amount = (int) $transaction->amount;
         $invoiceNumber = $transaction->order_id;
-        $productName = 'Amplop Digital - '.($transaction->event->name ?? 'Undangan');
+        $productName = $this->sanitizeDokuText(
+            'Amplop Digital - '.($transaction->event->name ?? 'Undangan'),
+            255,
+        );
 
         $frontendUrl = rtrim((string) config('doku.frontend_url'), '/');
         $returnUrl = $frontendUrl.'/invitation/'.$guest->secret_token
             .'?order_id='.urlencode($invoiceNumber);
 
         $customer = [
-            'name' => $transaction->sender_name,
+            'name' => $this->sanitizeDokuText((string) $transaction->sender_name, 100),
             'email' => $this->customerEmail($transaction),
         ];
 
@@ -303,6 +306,23 @@ class DokuService
         if ((string) config('doku.client_id') === '' || (string) config('doku.secret_key') === '') {
             throw new RuntimeException('DOKU is not configured.');
         }
+    }
+
+    /**
+     * DOKU Checkout rejects text outside: a-z A-Z 0-9 . - / + , = _ : ' @ % ( ) and space.
+     */
+    private function sanitizeDokuText(string $value, int $maxLength): string
+    {
+        $value = str_replace(['&', '#'], [' dan ', ' '], $value);
+        $value = preg_replace("/[^a-zA-Z0-9 .\\-\/+,=_:'@%()]/", ' ', $value) ?? '';
+        $value = preg_replace('/\s+/', ' ', $value) ?? '';
+        $value = trim($value);
+
+        if ($value === '') {
+            return 'Guest';
+        }
+
+        return strlen($value) > $maxLength ? substr($value, 0, $maxLength) : $value;
     }
 
     private function customerEmail(EnvelopeTransaction $transaction): string

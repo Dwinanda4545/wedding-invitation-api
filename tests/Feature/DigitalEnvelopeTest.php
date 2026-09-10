@@ -84,6 +84,48 @@ class DigitalEnvelopeTest extends TestCase
         ]);
     }
 
+    public function test_doku_payload_strips_invalid_characters(): void
+    {
+        ['guest' => $guest] = $this->enabledGuest();
+
+        Http::fake([
+            '*/checkout/v1/payment' => Http::response([
+                'response' => [
+                    'payment' => [
+                        'url' => 'https://sandbox.doku.com/checkout/sanitized',
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $this->postJson("/api/invitation/{$guest->secret_token}/digital-envelopes", [
+            'sender_name' => 'Budi & Keluarga #1',
+            'amount' => 100000,
+        ])->assertCreated();
+
+        Http::assertSent(function (\Illuminate\Http\Client\Request $request) {
+            if (! str_contains($request->url(), '/checkout/v1/payment')) {
+                return false;
+            }
+
+            $payload = $request->data();
+            $itemName = data_get($payload, 'order.line_items.0.name');
+            $customerName = data_get($payload, 'customer.name');
+
+            $this->assertIsString($itemName);
+            $this->assertIsString($customerName);
+            $this->assertDoesNotMatchRegularExpression('/[^a-zA-Z0-9 .\\-\\/+ ,=_:\'@%()]/', $itemName);
+            $this->assertDoesNotMatchRegularExpression('/[^a-zA-Z0-9 .\\-\\/+ ,=_:\'@%()]/', $customerName);
+            $this->assertStringNotContainsString('&', $itemName);
+            $this->assertStringNotContainsString('#', $customerName);
+            $this->assertStringContainsString('Amplop Digital', $itemName);
+            $this->assertStringContainsString('Raka', $itemName);
+            $this->assertStringContainsString('Sinta', $itemName);
+
+            return true;
+        });
+    }
+
     public function test_invalid_amount_rejected(): void
     {
         ['guest' => $guest] = $this->enabledGuest();
