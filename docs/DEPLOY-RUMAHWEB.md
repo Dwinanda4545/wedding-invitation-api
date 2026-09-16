@@ -42,6 +42,7 @@ php artisan key:generate   # jika APP_KEY masih kosong
 | `FRONTEND_URL` | `https://wedding-invitation.sanadwi.my.id` |
 | `DB_*` | dari cPanel → MySQL Databases |
 | `DOKU_*` | Client ID + Secret Key dari **DOKU Dashboard** (sandbox) |
+| `FLOWKIRIM_*` | Token + base `https://scan.flowkirim.com` (lihat Bagian F) |
 | Webhook URL | `https://api.wedding-invitation.sanadwi.my.id/api/doku/notification` |
 
 ### A3. Database
@@ -175,15 +176,18 @@ https://api.wedding-invitation.sanadwi.my.id/api/doku/notification
 
 ```
 ☐ Document root API → .../public
-☐ .env production di server (APP_KEY, DB, DOKU sandbox)
+☐ .env production di server (APP_KEY, DB, DOKU sandbox, FLOWKIRIM_*)
+☐ FRONTEND_URL = URL publik https (bukan localhost) agar link WA jadi hyperlink
 ☐ php artisan migrate --force
 ☐ php artisan storage:link
 ☐ /api/health → ok
 ☐ Frontend dist/ ter-upload + .htaccess SPA
 ☐ Login admin berhasil (Sanctum cookie)
+☐ WA Devices: isi session_id + set default di acara
 ☐ Webhook URL terdaftar di DOKU Dashboard
 ☐ Section Amplop Digital enabled
 ☐ Tes 1 transaksi amplop end-to-end
+☐ Tes 1 kirim undangan WhatsApp
 ```
 
 ---
@@ -199,6 +203,9 @@ https://api.wedding-invitation.sanadwi.my.id/api/doku/notification
 | Webhook tidak update status | URL webhook di DOKU ≠ `/api/doku/notification`; harus HTTPS publik |
 | Refresh 404 di React | Tambah `.htaccess` SPA di frontend |
 | Deploy Git stuck **queued** | Batal antrian, Deploy ulang; atau update manual File Manager + SQL migrate. `.cpanel.yml` sudah tanpa `composer install` |
+| WA: Could not resolve host api.flowkirim.com | Set `FLOWKIRIM_BASE_URL=https://scan.flowkirim.com` |
+| WA: Forbidden device/pool | `session_id` di WA Devices salah / bukan milik akun token |
+| Link WA tidak hyperlink | `FRONTEND_URL` harus `https://...` publik, bukan localhost |
 
 ---
 
@@ -230,6 +237,30 @@ VITE_PUSHER_APP_CLUSTER=ap1
 ```
 
 Setelah ubah env API, hapus `bootstrap/cache/config.php` lewat File Manager lalu Deploy ulang (atau tunggu cache clear dari `.cpanel.yml`).
+
+---
+
+## Bagian F — FlowKirim WhatsApp (production)
+
+1. Di `.env` server API isi:
+
+```env
+FLOWKIRIM_API_TOKEN=...
+FLOWKIRIM_BASE_URL=https://scan.flowkirim.com
+FLOWKIRIM_SEND_PATH=/api/whatsapp/messages/text
+FLOWKIRIM_DEVICE_FIELD=session_id
+FLOWKIRIM_APPEND_JID_SUFFIX=true
+FLOWKIRIM_LINK_PREVIEW=true
+FRONTEND_URL=https://wedding-invitation.sanadwi.my.id
+```
+
+2. Hapus `bootstrap/cache/config.php` (atau `php artisan config:clear`).
+3. Pastikan migration terbaru sudah jalan (`invitation_sends`, `whatsapp_devices`, kolom `whatsapp_device_id`).
+4. Login admin production → **WA Devices** → isi `session_id` dari [scan.flowkirim.com](https://scan.flowkirim.com).
+5. Di **Acara** → set device pengirim default.
+6. Tes **Kirim WA** dari halaman Tamu.
+
+**Catatan link hyperlink:** `FRONTEND_URL` harus domain HTTPS publik. `localhost` tidak akan jadi hyperlink biru di WhatsApp.
 
 ---
 

@@ -32,6 +32,7 @@ class EventUpdateRequest extends FormRequest
             'invitation_template' => ['sometimes', 'nullable', 'string', 'max:50'],
             'invitation_style' => ['sometimes', 'nullable', 'array'],
             'invitation_content' => ['sometimes', 'nullable', 'string'],
+            'whatsapp_device_id' => ['sometimes', 'nullable', 'integer', 'exists:whatsapp_devices,id'],
         ];
     }
 }

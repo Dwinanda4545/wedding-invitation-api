@@ -35,7 +35,9 @@ class EventController extends Controller
 
     public function show(Event $event)
     {
-        return response()->json(['data' => $event->loadCount('guests')]);
+        return response()->json([
+            'data' => $event->loadCount('guests')->load('whatsappDevice'),
+        ]);
     }
 
     public function update(EventUpdateRequest $request, Event $event)
@@ -52,7 +54,9 @@ class EventController extends Controller
 
         $event->update($data);
 
-        return response()->json(['data' => $event->fresh()]);
+        return response()->json([
+            'data' => $event->fresh()->load('whatsappDevice'),
+        ]);
     }
 
     public function destroy(Event $event)

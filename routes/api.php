@@ -15,10 +15,12 @@ use App\Http\Controllers\Api\EventScheduleController;
 use App\Http\Controllers\Api\GuestbookController;
 use App\Http\Controllers\Api\GuestController;
 use App\Http\Controllers\Api\InvitationController;
+use App\Http\Controllers\Api\InvitationSendController;
 use App\Http\Controllers\Api\InvitationThemeController;
 use App\Http\Controllers\Api\InvitationWishController;
 use App\Http\Controllers\Api\LoveStoryController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\WhatsappDeviceController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => ['ok' => true]);
@@ -90,13 +92,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/events/{event}/guests', [GuestController::class, 'index']);
         Route::post('/events/{event}/guests', [GuestController::class, 'store']);
+        Route::post('/events/{event}/guests/import', [GuestController::class, 'import']);
+        Route::post('/events/{event}/guests/send-invitations', [InvitationSendController::class, 'sendBulk']);
+        Route::get('/events/{event}/invitation-sends', [InvitationSendController::class, 'indexForEvent']);
+
         Route::get('/events/{event}/guests/{guest}', [GuestController::class, 'show']);
         Route::put('/events/{event}/guests/{guest}', [GuestController::class, 'update']);
         Route::patch('/events/{event}/guests/{guest}', [GuestController::class, 'update']);
         Route::delete('/events/{event}/guests/{guest}', [GuestController::class, 'destroy']);
 
-        Route::post('/events/{event}/guests/import', [GuestController::class, 'import']);
         Route::post('/events/{event}/guests/{guest}/qr/regenerate', [GuestController::class, 'regenerateQr']);
+        Route::post('/events/{event}/guests/{guest}/send-invitation', [InvitationSendController::class, 'sendOne']);
+        Route::get('/events/{event}/guests/{guest}/invitation-sends', [InvitationSendController::class, 'indexForGuest']);
 
         Route::get('/events/{event}/panitia', [EventPanitiaController::class, 'index']);
         Route::post('/events/{event}/panitia', [EventPanitiaController::class, 'store']);
@@ -107,5 +114,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/invitation-themes/{invitationTheme}', [InvitationThemeController::class, 'update']);
         Route::patch('/invitation-themes/{invitationTheme}', [InvitationThemeController::class, 'update']);
         Route::delete('/invitation-themes/{invitationTheme}', [InvitationThemeController::class, 'destroy']);
+
+        Route::apiResource('whatsapp-devices', WhatsappDeviceController::class);
     });
 });

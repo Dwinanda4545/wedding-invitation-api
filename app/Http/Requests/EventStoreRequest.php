@@ -18,6 +18,7 @@ class EventStoreRequest extends FormRequest
             'slug' => ['nullable', 'string', 'max:255', 'unique:events,slug'],
             'event_date' => ['nullable', 'date'],
             'location' => ['nullable', 'string', 'max:255'],
+            'whatsapp_device_id' => ['nullable', 'integer', 'exists:whatsapp_devices,id'],
         ];
     }
 }

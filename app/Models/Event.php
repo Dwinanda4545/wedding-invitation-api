@@ -23,6 +23,7 @@ class Event extends Model
         'couple_info',
         'invitation_settings',
         'hosts',
+        'whatsapp_device_id',
     ];
 
     protected $casts = [
@@ -61,6 +62,16 @@ class Event extends Model
     public function envelopeTransactions()
     {
         return $this->hasMany(EnvelopeTransaction::class)->latest();
+    }
+
+    public function invitationSends()
+    {
+        return $this->hasMany(InvitationSend::class)->latest();
+    }
+
+    public function whatsappDevice()
+    {
+        return $this->belongsTo(WhatsappDevice::class);
     }
 
     public function panitiaUsers(): BelongsToMany

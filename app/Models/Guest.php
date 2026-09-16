@@ -28,6 +28,11 @@ class Guest extends Model
         return $this->hasMany(InvitationWish::class);
     }
 
+    public function invitationSends()
+    {
+        return $this->hasMany(InvitationSend::class)->latest();
+    }
+
     protected static function booted(): void
     {
         static::creating(function (Guest $guest) {
