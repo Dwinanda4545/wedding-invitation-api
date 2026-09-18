@@ -236,7 +236,13 @@ VITE_PUSHER_APP_KEY=
 VITE_PUSHER_APP_CLUSTER=ap1
 ```
 
+`VITE_PUSHER_APP_KEY` harus **sama** dengan `PUSHER_APP_KEY` API. Setelah ubah env frontend, **rebuild** `npm run build` lalu upload ulang `dist/`.
+
 Setelah ubah env API, hapus `bootstrap/cache/config.php` lewat File Manager lalu Deploy ulang (atau tunggu cache clear dari `.cpanel.yml`).
+
+**CORS:** `config/cors.php` harus mengizinkan path `broadcasting/*` (auth channel private). Tanpa itu, Buku Tamu di production tidak realtime meski key Pusher sudah benar — lokal tetap jalan karena Vite proxy.
+
+Cek cepat di browser DevTools → Network: request `POST .../broadcasting/auth` harus **200**, bukan CORS error / 403.
 
 ---
 

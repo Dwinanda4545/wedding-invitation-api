@@ -8,7 +8,9 @@ $allowedOrigins = array_values(array_filter(array_map(
 )));
 
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout'],
+    // broadcasting/auth required for Laravel Echo private channels (Pusher guestbook).
+    // Without it, production SPA (different subdomain) cannot authorize subscriptions.
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'login', 'logout', 'broadcasting/*'],
     'allowed_methods' => ['*'],
     'allowed_origins' => $allowedOrigins,
     'allowed_origins_patterns' => [],
