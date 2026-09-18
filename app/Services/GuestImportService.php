@@ -1,0 +1,244 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Event;
+use Illuminate\Http\UploadedFile;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Csv as CsvWriter;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+
+class GuestImportService
+{
+    public const HEADERS = ['name', 'phone_number', 'guest_type'];
+
+    /** @var list<array{name: string, phone_number: string, guest_type: string}> */
+    public const SAMPLE_ROWS = [
+        [
+            'name' => 'Budi Santoso',
+            'phone_number' => '081234567890',
+            'guest_type' => 'VIP',
+        ],
+        [
+            'name' => 'Siti Aminah',
+            'phone_number' => '6281234567890',
+            'guest_type' => 'Regular',
+        ],
+    ];
+
+    /**
+     * @return array{created: int, skipped_empty_rows: int}
+     */
+    public function import(Event $event, UploadedFile $file, GuestQrCodeService $qr): array
+    {
+        $rows = $this->parseRows($file);
+
+        $created = 0;
+        $skipped = 0;
+
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['name'] ?? ''));
+            if ($name === '') {
+                $skipped++;
+
+                continue;
+            }
+
+            $phone = trim((string) ($row['phone_number'] ?? ''));
+            $typeRaw = strtoupper(trim((string) ($row['guest_type'] ?? '')));
+            $guestType = $typeRaw === 'VIP' ? 'VIP' : 'Regular';
+
+            $guest = $event->guests()->create([
+                'name' => $name,
+                'phone_number' => $phone !== '' ? $phone : null,
+                'guest_type' => $guestType,
+            ]);
+
+            $relative = $qr->generateAndStore($guest, $guest->secret_token);
+            $guest->forceFill(['qr_code_path' => $relative])->save();
+
+            $created++;
+        }
+
+        return [
+            'created' => $created,
+            'skipped_empty_rows' => $skipped,
+        ];
+    }
+
+    public function downloadTemplate(string $format = 'xlsx'): StreamedResponse
+    {
+        $format = strtolower($format);
+        if (! in_array($format, ['csv', 'xlsx'], true)) {
+            throw new RuntimeException('Unsupported template format');
+        }
+
+        $spreadsheet = $this->buildTemplateSpreadsheet();
+        $filename = "guest-import-template.{$format}";
+
+        if ($format === 'csv') {
+            $writer = new CsvWriter($spreadsheet);
+            $writer->setDelimiter(',');
+            $writer->setEnclosure('"');
+            $writer->setLineEnding("\r\n");
+            $writer->setSheetIndex(0);
+            $contentType = 'text/csv; charset=UTF-8';
+        } else {
+            $writer = new XlsxWriter($spreadsheet);
+            $contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        }
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => $contentType,
+        ]);
+    }
+
+    /**
+     * @return list<array{name: string, phone_number: string, guest_type: string}>
+     */
+    protected function parseRows(UploadedFile $file): array
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        if (in_array($extension, ['csv', 'txt'], true)) {
+            return $this->parseCsv($file->getRealPath());
+        }
+
+        if (in_array($extension, ['xlsx', 'xls'], true)) {
+            return $this->parseSpreadsheet($file->getRealPath());
+        }
+
+        // Fallback by mime / guessed type when extension is missing
+        $mime = $file->getMimeType() ?? '';
+        if (str_contains($mime, 'spreadsheet') || str_contains($mime, 'excel')) {
+            return $this->parseSpreadsheet($file->getRealPath());
+        }
+
+        return $this->parseCsv($file->getRealPath());
+    }
+
+    /**
+     * @return list<array{name: string, phone_number: string, guest_type: string}>
+     */
+    protected function parseCsv(string $path): array
+    {
+        $handle = fopen($path, 'r');
+        if ($handle === false) {
+            throw new RuntimeException('Could not read CSV file');
+        }
+
+        $headerLine = fgetcsv($handle);
+        if ($headerLine === false) {
+            fclose($handle);
+
+            throw new RuntimeException('CSV is empty');
+        }
+
+        // Strip UTF-8 BOM from first header cell if present
+        if (isset($headerLine[0])) {
+            $headerLine[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $headerLine[0]);
+        }
+
+        $header = array_map(fn ($h) => strtolower(trim((string) $h)), $headerLine);
+        $indexes = $this->resolveColumnIndexes($header);
+
+        $rows = [];
+        while (($row = fgetcsv($handle)) !== false) {
+            $rows[] = [
+                'name' => (string) ($row[$indexes['name']] ?? ''),
+                'phone_number' => $indexes['phone_number'] !== false
+                    ? (string) ($row[$indexes['phone_number']] ?? '')
+                    : '',
+                'guest_type' => $indexes['guest_type'] !== false
+                    ? (string) ($row[$indexes['guest_type']] ?? '')
+                    : '',
+            ];
+        }
+
+        fclose($handle);
+
+        return $rows;
+    }
+
+    /**
+     * @return list<array{name: string, phone_number: string, guest_type: string}>
+     */
+    protected function parseSpreadsheet(string $path): array
+    {
+        $spreadsheet = IOFactory::load($path);
+        $sheet = $spreadsheet->getActiveSheet();
+        $data = $sheet->toArray(null, true, true, false);
+
+        if ($data === []) {
+            throw new RuntimeException('Spreadsheet is empty');
+        }
+
+        $headerLine = array_shift($data);
+        $header = array_map(
+            fn ($h) => strtolower(trim((string) ($h ?? ''))),
+            $headerLine
+        );
+        $indexes = $this->resolveColumnIndexes($header);
+
+        $rows = [];
+        foreach ($data as $row) {
+            $rows[] = [
+                'name' => (string) ($row[$indexes['name']] ?? ''),
+                'phone_number' => $indexes['phone_number'] !== false
+                    ? (string) ($row[$indexes['phone_number']] ?? '')
+                    : '',
+                'guest_type' => $indexes['guest_type'] !== false
+                    ? (string) ($row[$indexes['guest_type']] ?? '')
+                    : '',
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  list<string>  $header
+     * @return array{name: int, phone_number: int|false, guest_type: int|false}
+     */
+    protected function resolveColumnIndexes(array $header): array
+    {
+        $idxName = array_search('name', $header, true);
+        if ($idxName === false) {
+            throw new RuntimeException('File must include a name column');
+        }
+
+        return [
+            'name' => $idxName,
+            'phone_number' => array_search('phone_number', $header, true),
+            'guest_type' => array_search('guest_type', $header, true),
+        ];
+    }
+
+    protected function buildTemplateSpreadsheet(): Spreadsheet
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Guests');
+
+        foreach (self::HEADERS as $col => $header) {
+            $sheet->setCellValue([$col + 1, 1], $header);
+        }
+
+        foreach (self::SAMPLE_ROWS as $rowIndex => $sample) {
+            $sheet->setCellValue([1, $rowIndex + 2], $sample['name']);
+            $sheet->setCellValue([2, $rowIndex + 2], $sample['phone_number']);
+            $sheet->setCellValue([3, $rowIndex + 2], $sample['guest_type']);
+        }
+
+        foreach (range('A', 'C') as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
+        }
+
+        return $spreadsheet;
+    }
+}

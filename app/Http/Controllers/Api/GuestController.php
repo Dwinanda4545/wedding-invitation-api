@@ -8,9 +8,12 @@ use App\Http\Requests\GuestStoreRequest;
 use App\Http\Requests\GuestUpdateRequest;
 use App\Models\Event;
 use App\Models\Guest;
+use App\Services\GuestImportService;
 use App\Services\GuestQrCodeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class GuestController extends Controller
 {
@@ -63,67 +66,29 @@ class GuestController extends Controller
         return response()->json(['message' => 'Deleted']);
     }
 
-    public function import(GuestImportRequest $request, Event $event, GuestQrCodeService $qr)
+    public function importTemplate(Request $request, GuestImportService $importer): StreamedResponse
     {
-        $path = $request->file('file')->getRealPath();
-        $handle = fopen($path, 'r');
+        $format = strtolower((string) $request->query('format', 'xlsx'));
 
-        if ($handle === false) {
-            return response()->json(['message' => 'Could not read CSV file'], 422);
+        if (! in_array($format, ['csv', 'xlsx'], true)) {
+            abort(422, 'format must be csv or xlsx');
         }
 
-        $headerLine = fgetcsv($handle);
-        if ($headerLine === false) {
-            fclose($handle);
+        return $importer->downloadTemplate($format);
+    }
 
-            return response()->json(['message' => 'CSV is empty'], 422);
+    public function import(GuestImportRequest $request, Event $event, GuestImportService $importer, GuestQrCodeService $qr)
+    {
+        try {
+            $result = $importer->import($event, $request->file('file'), $qr);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
-
-        $header = array_map(fn ($h) => strtolower(trim((string) $h)), $headerLine);
-
-        $idxName = array_search('name', $header, true);
-        $idxPhone = array_search('phone_number', $header, true);
-        $idxType = array_search('guest_type', $header, true);
-
-        if ($idxName === false) {
-            fclose($handle);
-
-            return response()->json(['message' => 'CSV must include a name column'], 422);
-        }
-
-        $created = 0;
-        $skipped = 0;
-
-        while (($row = fgetcsv($handle)) !== false) {
-            $name = trim((string) ($row[$idxName] ?? ''));
-            if ($name === '') {
-                $skipped++;
-
-                continue;
-            }
-
-            $phone = $idxPhone !== false ? trim((string) ($row[$idxPhone] ?? '')) : null;
-            $typeRaw = $idxType !== false ? strtoupper(trim((string) ($row[$idxType] ?? ''))) : '';
-            $guestType = $typeRaw === 'VIP' ? 'VIP' : 'Regular';
-
-            $guest = $event->guests()->create([
-                'name' => $name,
-                'phone_number' => $phone ?: null,
-                'guest_type' => $guestType,
-            ]);
-
-            $relative = $qr->generateAndStore($guest, $guest->secret_token);
-            $guest->forceFill(['qr_code_path' => $relative])->save();
-
-            $created++;
-        }
-
-        fclose($handle);
 
         return response()->json([
             'message' => 'Import finished',
-            'created' => $created,
-            'skipped_empty_rows' => $skipped,
+            'created' => $result['created'],
+            'skipped_empty_rows' => $result['skipped_empty_rows'],
         ]);
     }
 
