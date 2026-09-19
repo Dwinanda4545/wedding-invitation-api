@@ -67,15 +67,19 @@ class GuestController extends Controller
         return response()->json(['message' => 'Deleted']);
     }
 
-    public function importTemplate(Request $request, GuestImportService $importer): StreamedResponse
+    public function importTemplate(Request $request, GuestImportService $importer): StreamedResponse|\Illuminate\Http\JsonResponse
     {
         $format = strtolower((string) $request->query('format', 'xlsx'));
 
         if (! in_array($format, ['csv', 'xlsx'], true)) {
-            abort(422, 'format must be csv or xlsx');
+            return response()->json(['message' => 'format must be csv or xlsx'], 422);
         }
 
-        return $importer->downloadTemplate($format);
+        try {
+            return $importer->downloadTemplate($format);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     public function import(GuestImportRequest $request, Event $event, GuestImportService $importer, GuestQrCodeService $qr)

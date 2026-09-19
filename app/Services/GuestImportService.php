@@ -6,8 +6,6 @@ use App\Models\Event;
 use Illuminate\Http\UploadedFile;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Csv as CsvWriter;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -97,25 +95,45 @@ class GuestImportService
             throw new RuntimeException('Unsupported template format');
         }
 
-        $spreadsheet = $this->buildTemplateSpreadsheet();
         $filename = "guest-import-template.{$format}";
 
-        if ($format === 'csv') {
-            $writer = new CsvWriter($spreadsheet);
-            $writer->setDelimiter(',');
-            $writer->setEnclosure('"');
-            $writer->setLineEnding("\r\n");
-            $writer->setSheetIndex(0);
-            $contentType = 'text/csv; charset=UTF-8';
-        } else {
-            $writer = new XlsxWriter($spreadsheet);
-            $contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        if ($format === 'xlsx') {
+            $path = resource_path('templates/guest-import-template.xlsx');
+            if (! is_readable($path)) {
+                throw new RuntimeException('Template file is missing on server');
+            }
+
+            return response()->streamDownload(function () use ($path) {
+                $handle = fopen($path, 'rb');
+                if ($handle === false) {
+                    return;
+                }
+                fpassthru($handle);
+                fclose($handle);
+            }, $filename, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ]);
         }
 
-        return response()->streamDownload(function () use ($writer) {
-            $writer->save('php://output');
+        // CSV without PhpSpreadsheet (shared hosting safe)
+        return response()->streamDownload(function () {
+            $out = fopen('php://output', 'w');
+            if ($out === false) {
+                return;
+            }
+            fprintf($out, chr(0xEF).chr(0xBB).chr(0xBF));
+            fputcsv($out, self::HEADERS);
+            foreach (self::SAMPLE_ROWS as $row) {
+                fputcsv($out, [
+                    $row['name'],
+                    $row['phone_number'],
+                    $row['guest_type'],
+                    $row['relation'],
+                ]);
+            }
+            fclose($out);
         }, $filename, [
-            'Content-Type' => $contentType,
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 
@@ -131,11 +149,15 @@ class GuestImportService
         }
 
         if (in_array($extension, ['xlsx', 'xls'], true)) {
+            $this->assertSpreadsheetAvailable();
+
             return $this->parseSpreadsheet($file->getRealPath());
         }
 
         $mime = $file->getMimeType() ?? '';
         if (str_contains($mime, 'spreadsheet') || str_contains($mime, 'excel')) {
+            $this->assertSpreadsheetAvailable();
+
             return $this->parseSpreadsheet($file->getRealPath());
         }
 
@@ -244,8 +266,19 @@ class GuestImportService
         ];
     }
 
+    protected function assertSpreadsheetAvailable(): void
+    {
+        if (! class_exists(Spreadsheet::class)) {
+            throw new RuntimeException(
+                'Import XLSX membutuhkan PhpSpreadsheet di server. Upload vendor (lihat deploy-rumahweb) atau gunakan file CSV.'
+            );
+        }
+    }
+
     protected function buildTemplateSpreadsheet(): Spreadsheet
     {
+        $this->assertSpreadsheetAvailable();
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Guests');
