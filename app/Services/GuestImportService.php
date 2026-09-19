@@ -4,10 +4,9 @@ namespace App\Services;
 
 use App\Models\Event;
 use Illuminate\Http\UploadedFile;
-use PhpOffice\PhpSpreadsheet\IOFactory;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class GuestImportService
 {
@@ -149,16 +148,12 @@ class GuestImportService
         }
 
         if (in_array($extension, ['xlsx', 'xls'], true)) {
-            $this->assertSpreadsheetAvailable();
-
-            return $this->parseSpreadsheet($file->getRealPath());
+            return $this->parseXlsx($file->getRealPath());
         }
 
         $mime = $file->getMimeType() ?? '';
         if (str_contains($mime, 'spreadsheet') || str_contains($mime, 'excel')) {
-            $this->assertSpreadsheetAvailable();
-
-            return $this->parseSpreadsheet($file->getRealPath());
+            return $this->parseXlsx($file->getRealPath());
         }
 
         return $this->parseCsv($file->getRealPath());
@@ -199,14 +194,39 @@ class GuestImportService
     }
 
     /**
+     * Read .xlsx with PHP ZipArchive so shared hosting does not need PhpSpreadsheet.
+     *
      * @return list<array{name: string, phone_number: string, guest_type: string, relation: string}>
      */
-    protected function parseSpreadsheet(string $path): array
+    protected function parseXlsx(string $path): array
     {
-        $spreadsheet = IOFactory::load($path);
-        $sheet = $spreadsheet->getActiveSheet();
-        $data = $sheet->toArray(null, true, true, false);
+        if (! class_exists(ZipArchive::class)) {
+            throw new RuntimeException('Server tidak bisa membaca XLSX. Simpan file sebagai CSV lalu import ulang.');
+        }
 
+        $zip = new ZipArchive();
+        if ($zip->open($path) !== true) {
+            throw new RuntimeException('File Excel tidak bisa dibaca. Gunakan .xlsx (bukan .xls) atau simpan sebagai CSV.');
+        }
+
+        $shared = $this->readXlsxSharedStrings($zip);
+        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
+        if ($sheetXml === false) {
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $name = (string) $zip->getNameIndex($i);
+                if (preg_match('#^xl/worksheets/sheet\d+\.xml$#', $name) === 1) {
+                    $sheetXml = $zip->getFromName($name);
+                    break;
+                }
+            }
+        }
+        $zip->close();
+
+        if ($sheetXml === false || $sheetXml === '') {
+            throw new RuntimeException('Spreadsheet is empty');
+        }
+
+        $data = $this->readXlsxRows($sheetXml, $shared);
         if ($data === []) {
             throw new RuntimeException('Spreadsheet is empty');
         }
@@ -214,7 +234,7 @@ class GuestImportService
         $headerLine = array_shift($data);
         $header = array_map(
             fn ($h) => strtolower(trim((string) ($h ?? ''))),
-            $headerLine
+            $headerLine ?? []
         );
         $indexes = $this->resolveColumnIndexes($header);
 
@@ -224,6 +244,120 @@ class GuestImportService
         }
 
         return $rows;
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function readXlsxSharedStrings(ZipArchive $zip): array
+    {
+        $xml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($xml === false || $xml === '') {
+            return [];
+        }
+
+        $doc = $this->loadXlsxXml($xml);
+        $strings = [];
+        foreach ($doc->getElementsByTagName('si') as $si) {
+            $text = '';
+            foreach ($si->getElementsByTagName('t') as $node) {
+                $text .= $node->textContent;
+            }
+            $strings[] = $text;
+        }
+
+        return $strings;
+    }
+
+    /**
+     * @param  list<string>  $shared
+     * @return list<list<string>>
+     */
+    protected function readXlsxRows(string $sheetXml, array $shared): array
+    {
+        $doc = $this->loadXlsxXml($sheetXml);
+        $rows = [];
+
+        foreach ($doc->getElementsByTagName('row') as $rowNode) {
+            $cells = [];
+            foreach ($rowNode->getElementsByTagName('c') as $cell) {
+                if (! $cell->parentNode->isSameNode($rowNode)) {
+                    continue;
+                }
+                $ref = (string) $cell->getAttribute('r');
+                $index = $this->xlsxColumnIndex($ref);
+                $cells[$index] = $this->xlsxCellValue($cell, $shared);
+            }
+            if ($cells === []) {
+                $rows[] = [];
+
+                continue;
+            }
+            $max = max(array_keys($cells));
+            $line = array_fill(0, $max + 1, '');
+            foreach ($cells as $index => $value) {
+                $line[$index] = $value;
+            }
+            $rows[] = $line;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  list<string>  $shared
+     */
+    protected function xlsxCellValue(\DOMElement $cell, array $shared): string
+    {
+        $type = (string) $cell->getAttribute('t');
+
+        if ($type === 'inlineStr') {
+            $text = '';
+            foreach ($cell->getElementsByTagName('t') as $node) {
+                $text .= $node->textContent;
+            }
+
+            return $text;
+        }
+
+        $value = '';
+        foreach ($cell->childNodes as $child) {
+            if ($child instanceof \DOMElement && $child->localName === 'v') {
+                $value = $child->textContent;
+                break;
+            }
+        }
+
+        if ($type === 's') {
+            return $shared[(int) $value] ?? '';
+        }
+
+        return $value;
+    }
+
+    protected function xlsxColumnIndex(string $cellRef): int
+    {
+        if (preg_match('/^([A-Z]+)/i', $cellRef, $match) !== 1) {
+            return 0;
+        }
+
+        $index = 0;
+        foreach (str_split(strtoupper($match[1])) as $letter) {
+            $index = ($index * 26) + (ord($letter) - 64);
+        }
+
+        return $index - 1;
+    }
+
+    protected function loadXlsxXml(string $xml): \DOMDocument
+    {
+        $doc = new \DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $doc->loadXML($xml);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        return $doc;
     }
 
     /**
@@ -264,40 +398,5 @@ class GuestImportService
             'guest_type' => array_search('guest_type', $header, true),
             'relation' => array_search('relation', $header, true),
         ];
-    }
-
-    protected function assertSpreadsheetAvailable(): void
-    {
-        if (! class_exists(Spreadsheet::class)) {
-            throw new RuntimeException(
-                'Import XLSX membutuhkan PhpSpreadsheet di server. Upload vendor (lihat deploy-rumahweb) atau gunakan file CSV.'
-            );
-        }
-    }
-
-    protected function buildTemplateSpreadsheet(): Spreadsheet
-    {
-        $this->assertSpreadsheetAvailable();
-
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Guests');
-
-        foreach (self::HEADERS as $col => $header) {
-            $sheet->setCellValue([$col + 1, 1], $header);
-        }
-
-        foreach (self::SAMPLE_ROWS as $rowIndex => $sample) {
-            $sheet->setCellValue([1, $rowIndex + 2], $sample['name']);
-            $sheet->setCellValue([2, $rowIndex + 2], $sample['phone_number']);
-            $sheet->setCellValue([3, $rowIndex + 2], $sample['guest_type']);
-            $sheet->setCellValue([4, $rowIndex + 2], $sample['relation']);
-        }
-
-        foreach (range('A', 'D') as $column) {
-            $sheet->getColumnDimension($column)->setAutoSize(true);
-        }
-
-        return $spreadsheet;
     }
 }
