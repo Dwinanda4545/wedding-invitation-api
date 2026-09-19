@@ -85,7 +85,7 @@ class GuestController extends Controller
     public function import(GuestImportRequest $request, Event $event, GuestImportService $importer, GuestQrCodeService $qr)
     {
         try {
-            $result = $importer->import($event, $request->file('file'), $qr);
+            $result = $importer->import($event, $request->uploadedImportFile(), $qr);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
