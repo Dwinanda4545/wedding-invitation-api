@@ -25,6 +25,14 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/health', fn () => ['ok' => true]);
 
+Route::get('/invitation/open/{token}', [InvitationController::class, 'showOpen'])
+    ->where('token', '[A-Za-z0-9]+');
+Route::post('/invitation/open/{token}/wishes', [InvitationWishController::class, 'storeOpen'])
+    ->where('token', '[A-Za-z0-9]+');
+Route::post('/invitation/open/{token}/digital-envelopes', [DigitalEnvelopeController::class, 'storeOpen'])
+    ->middleware('throttle:10,1')
+    ->where('token', '[A-Za-z0-9]+');
+
 Route::get('/invitation/{secret_token}', [InvitationController::class, 'show'])
     ->where('secret_token', '[A-Za-z0-9]+');
 
@@ -69,6 +77,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/events/{event}/invitation', [EventInvitationController::class, 'show']);
         Route::put('/events/{event}/invitation', [EventInvitationController::class, 'update']);
         Route::patch('/events/{event}/invitation', [EventInvitationController::class, 'update']);
+        Route::post('/events/{event}/universal-invitation/regenerate', [EventInvitationController::class, 'regenerateUniversal']);
 
         Route::post('/events/{event}/schedules', [EventScheduleController::class, 'store']);
         Route::put('/events/{event}/schedules/{schedule}', [EventScheduleController::class, 'update']);

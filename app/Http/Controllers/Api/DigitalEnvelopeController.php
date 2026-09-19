@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DigitalEnvelopeStoreRequest;
 use App\Models\EnvelopeTransaction;
+use App\Models\Event;
 use App\Models\Guest;
 use App\Services\DokuService;
 use App\Support\EnvelopeSettings;
@@ -48,7 +49,67 @@ class DigitalEnvelopeController extends Controller
         ]);
 
         try {
-            $paymentUrl = $this->doku->createTransaction($transaction, $guest);
+            $paymentUrl = $this->doku->createTransaction(
+                $transaction,
+                '/invitation/'.$guest->secret_token,
+            );
+        } catch (RuntimeException $e) {
+            $transaction->update(['status' => 'failed']);
+
+            report($e);
+
+            return response()->json([
+                'message' => 'Payment service unavailable',
+                'detail' => config('app.debug') ? $e->getMessage() : null,
+            ], 503);
+        }
+
+        $transaction->refresh();
+        $transaction->update(['payment_url' => $paymentUrl]);
+
+        return response()->json([
+            'data' => [
+                'order_id' => $transaction->order_id,
+                'payment_url' => $paymentUrl,
+                'amount' => $transaction->amount,
+                'status' => $transaction->status,
+            ],
+        ], 201);
+    }
+
+    public function storeOpen(DigitalEnvelopeStoreRequest $request, string $token): JsonResponse
+    {
+        $event = Event::findEnabledUniversal($token);
+
+        if (! $event) {
+            return response()->json(['message' => 'Invitation not found'], 404);
+        }
+
+        $envelopeSettings = EnvelopeSettings::fromEvent($event);
+
+        if (! $envelopeSettings['enabled']) {
+            return response()->json(['message' => 'Amplop digital tidak tersedia'], 403);
+        }
+
+        $orderId = sprintf('ENV-%d-%s', $event->id, Str::lower(Str::ulid()));
+
+        $transaction = EnvelopeTransaction::create([
+            'event_id' => $event->id,
+            'guest_id' => null,
+            'sender_name' => $request->input('sender_name'),
+            'sender_email' => $request->input('sender_email'),
+            'sender_phone' => $request->input('sender_phone'),
+            'amount' => (int) $request->input('amount'),
+            'message' => $request->input('message'),
+            'order_id' => $orderId,
+            'status' => 'pending',
+        ]);
+
+        try {
+            $paymentUrl = $this->doku->createTransaction(
+                $transaction,
+                '/invitation/open/'.$token,
+            );
         } catch (RuntimeException $e) {
             $transaction->update(['status' => 'failed']);
 

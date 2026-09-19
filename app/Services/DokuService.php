@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\EnvelopeTransaction;
-use App\Models\Guest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -11,7 +10,7 @@ use RuntimeException;
 
 class DokuService
 {
-    public function createTransaction(EnvelopeTransaction $transaction, Guest $guest): string
+    public function createTransaction(EnvelopeTransaction $transaction, string $invitationPath): string
     {
         $this->assertConfigured();
 
@@ -25,7 +24,7 @@ class DokuService
         );
 
         $frontendUrl = rtrim((string) config('doku.frontend_url'), '/');
-        $returnUrl = $frontendUrl.'/invitation/'.$guest->secret_token
+        $returnUrl = $frontendUrl.$invitationPath
             .'?order_id='.urlencode($invoiceNumber);
 
         $customer = [

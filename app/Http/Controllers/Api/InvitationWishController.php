@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\InvitationWishStoreRequest;
 use App\Http\Requests\InvitationWishUpdateRequest;
+use App\Models\Event;
 use App\Models\Guest;
 use App\Models\InvitationWish;
 
@@ -38,6 +39,34 @@ class InvitationWishController extends Controller
             'event_id' => $guest->event_id,
             'guest_id' => $guest->id,
             'guest_name' => $request->input('guest_name', $guest->name),
+            'message' => $request->input('message'),
+            'rsvp_status' => $request->input('rsvp_status', 'pending'),
+        ]);
+
+        return response()->json([
+            'data' => $this->wishPayload($wish),
+        ], 201);
+    }
+
+    public function storeOpen(InvitationWishStoreRequest $request, string $token)
+    {
+        $event = Event::findEnabledUniversal($token);
+
+        if (! $event) {
+            return response()->json(['message' => 'Invitation not found'], 404);
+        }
+
+        if (! filled($request->input('guest_name'))) {
+            return response()->json([
+                'message' => 'Nama pengirim wajib diisi.',
+                'errors' => ['guest_name' => ['Nama pengirim wajib diisi.']],
+            ], 422);
+        }
+
+        $wish = InvitationWish::create([
+            'event_id' => $event->id,
+            'guest_id' => null,
+            'guest_name' => $request->input('guest_name'),
             'message' => $request->input('message'),
             'rsvp_status' => $request->input('rsvp_status', 'pending'),
         ]);

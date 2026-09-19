@@ -11,6 +11,8 @@ class Event extends Model
 {
     use HasFactory, SoftDeletes;
 
+    public const DEFAULT_UNIVERSAL_GREETING = 'Yth. Bapak/Ibu/Saudara/i';
+
     protected $fillable = [
         'name',
         'slug',
@@ -24,6 +26,9 @@ class Event extends Model
         'invitation_settings',
         'hosts',
         'whatsapp_device_id',
+        'universal_invitation_token',
+        'universal_invitation_enabled',
+        'universal_greeting',
     ];
 
     protected $casts = [
@@ -32,7 +37,16 @@ class Event extends Model
         'couple_info' => 'array',
         'invitation_settings' => 'array',
         'hosts' => 'array',
+        'universal_invitation_enabled' => 'boolean',
     ];
+
+    public static function findEnabledUniversal(string $token): ?self
+    {
+        return static::query()
+            ->where('universal_invitation_token', $token)
+            ->where('universal_invitation_enabled', true)
+            ->first();
+    }
 
     public function guests()
     {
