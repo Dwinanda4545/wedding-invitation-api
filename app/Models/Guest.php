@@ -11,7 +11,17 @@ class Guest extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $fillable = ['event_id', 'name', 'phone_number', 'guest_type', 'secret_token', 'qr_code_path', 'is_attended', 'scanned_at'];
+    protected $fillable = [
+        'event_id',
+        'name',
+        'phone_number',
+        'guest_type',
+        'guest_relation_id',
+        'secret_token',
+        'qr_code_path',
+        'is_attended',
+        'scanned_at',
+    ];
 
     protected $casts = [
         'is_attended' => 'boolean',
@@ -21,6 +31,11 @@ class Guest extends Model
     public function event()
     {
         return $this->belongsTo(Event::class);
+    }
+
+    public function relation()
+    {
+        return $this->belongsTo(GuestRelation::class, 'guest_relation_id');
     }
 
     public function wishes()

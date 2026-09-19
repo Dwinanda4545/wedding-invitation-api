@@ -20,6 +20,7 @@ class GuestController extends Controller
     public function index(Request $request, Event $event)
     {
         $guests = $event->guests()
+            ->with('relation')
             ->orderBy('name')
             ->get()
             ->map(fn (Guest $guest) => $this->guestPayload($guest));
@@ -89,6 +90,7 @@ class GuestController extends Controller
             'message' => 'Import finished',
             'created' => $result['created'],
             'skipped_empty_rows' => $result['skipped_empty_rows'],
+            'warnings' => $result['warnings'] ?? [],
         ]);
     }
 
@@ -115,6 +117,7 @@ class GuestController extends Controller
 
     protected function guestPayload(Guest $guest): array
     {
+        $guest->loadMissing('relation');
         $frontend = rtrim(config('app.frontend_url', ''), '/');
 
         return [
@@ -123,6 +126,13 @@ class GuestController extends Controller
             'name' => $guest->name,
             'phone_number' => $guest->phone_number,
             'guest_type' => $guest->guest_type,
+            'guest_relation_id' => $guest->guest_relation_id,
+            'relation' => $guest->relation
+                ? [
+                    'id' => $guest->relation->id,
+                    'label' => $guest->relation->label,
+                ]
+                : null,
             'secret_token' => $guest->secret_token,
             'qr_code_path' => $guest->qr_code_path,
             'qr_code_url' => $guest->qr_code_path ? Storage::disk('public')->url($guest->qr_code_path) : null,

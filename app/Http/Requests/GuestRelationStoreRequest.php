@@ -5,7 +5,7 @@ namespace App\Http\Requests;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class GuestStoreRequest extends FormRequest
+class GuestRelationStoreRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -17,17 +17,15 @@ class GuestStoreRequest extends FormRequest
         $eventId = $this->route('event')?->id;
 
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'phone_number' => ['nullable', 'string', 'max:50'],
-            'guest_type' => ['required', Rule::in(['VIP', 'Regular'])],
-            'guest_relation_id' => [
-                'nullable',
-                'integer',
-                Rule::exists('guest_relations', 'id')->where(
+            'label' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique('guest_relations', 'label')->where(
                     fn ($q) => $q->where('event_id', $eventId),
                 ),
             ],
+            'sort_order' => ['sometimes', 'integer', 'min:0'],
         ];
     }
 }
-

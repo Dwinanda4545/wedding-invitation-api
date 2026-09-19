@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\EventPanitiaController;
 use App\Http\Controllers\Api\EventScheduleController;
 use App\Http\Controllers\Api\GuestbookController;
 use App\Http\Controllers\Api\GuestController;
+use App\Http\Controllers\Api\GuestRelationController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\InvitationSendController;
 use App\Http\Controllers\Api\InvitationThemeController;
@@ -105,6 +106,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/events/{event}/guests/import', [GuestController::class, 'import']);
         Route::post('/events/{event}/guests/send-invitations', [InvitationSendController::class, 'sendBulk']);
         Route::get('/events/{event}/invitation-sends', [InvitationSendController::class, 'indexForEvent']);
+
+        Route::get('/events/{event}/guest-relations', [GuestRelationController::class, 'index']);
+        Route::post('/events/{event}/guest-relations', [GuestRelationController::class, 'store']);
+        Route::put('/events/{event}/guest-relations/{guestRelation}', [GuestRelationController::class, 'update']);
+        Route::patch('/events/{event}/guest-relations/{guestRelation}', [GuestRelationController::class, 'update']);
+        Route::delete('/events/{event}/guest-relations/{guestRelation}', [GuestRelationController::class, 'destroy']);
 
         Route::get('/events/{event}/guests/{guest}', [GuestController::class, 'show']);
         Route::put('/events/{event}/guests/{guest}', [GuestController::class, 'update']);

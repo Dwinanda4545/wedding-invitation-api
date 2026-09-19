@@ -13,24 +13,26 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class GuestImportService
 {
-    public const HEADERS = ['name', 'phone_number', 'guest_type'];
+    public const HEADERS = ['name', 'phone_number', 'guest_type', 'relation'];
 
-    /** @var list<array{name: string, phone_number: string, guest_type: string}> */
+    /** @var list<array{name: string, phone_number: string, guest_type: string, relation: string}> */
     public const SAMPLE_ROWS = [
         [
             'name' => 'Budi Santoso',
             'phone_number' => '081234567890',
             'guest_type' => 'VIP',
+            'relation' => 'Keluarga Mempelai Pria',
         ],
         [
             'name' => 'Siti Aminah',
             'phone_number' => '6281234567890',
             'guest_type' => 'Regular',
+            'relation' => 'Teman Kerja',
         ],
     ];
 
     /**
-     * @return array{created: int, skipped_empty_rows: int}
+     * @return array{created: int, skipped_empty_rows: int, warnings: list<string>}
      */
     public function import(Event $event, UploadedFile $file, GuestQrCodeService $qr): array
     {
@@ -38,8 +40,13 @@ class GuestImportService
 
         $created = 0;
         $skipped = 0;
+        $warnings = [];
 
-        foreach ($rows as $row) {
+        $relationsByLabel = $event->guestRelations()
+            ->get()
+            ->keyBy(fn ($r) => mb_strtolower(trim($r->label)));
+
+        foreach ($rows as $index => $row) {
             $name = trim((string) ($row['name'] ?? ''));
             if ($name === '') {
                 $skipped++;
@@ -51,10 +58,23 @@ class GuestImportService
             $typeRaw = strtoupper(trim((string) ($row['guest_type'] ?? '')));
             $guestType = $typeRaw === 'VIP' ? 'VIP' : 'Regular';
 
+            $relationId = null;
+            $relationLabel = trim((string) ($row['relation'] ?? ''));
+            if ($relationLabel !== '') {
+                $key = mb_strtolower($relationLabel);
+                $matched = $relationsByLabel->get($key);
+                if ($matched) {
+                    $relationId = $matched->id;
+                } else {
+                    $warnings[] = 'Baris '.($index + 2).': relasi "'.$relationLabel.'" tidak ditemukan, dikosongkan.';
+                }
+            }
+
             $guest = $event->guests()->create([
                 'name' => $name,
                 'phone_number' => $phone !== '' ? $phone : null,
                 'guest_type' => $guestType,
+                'guest_relation_id' => $relationId,
             ]);
 
             $relative = $qr->generateAndStore($guest, $guest->secret_token);
@@ -66,6 +86,7 @@ class GuestImportService
         return [
             'created' => $created,
             'skipped_empty_rows' => $skipped,
+            'warnings' => $warnings,
         ];
     }
 
@@ -99,7 +120,7 @@ class GuestImportService
     }
 
     /**
-     * @return list<array{name: string, phone_number: string, guest_type: string}>
+     * @return list<array{name: string, phone_number: string, guest_type: string, relation: string}>
      */
     protected function parseRows(UploadedFile $file): array
     {
@@ -113,7 +134,6 @@ class GuestImportService
             return $this->parseSpreadsheet($file->getRealPath());
         }
 
-        // Fallback by mime / guessed type when extension is missing
         $mime = $file->getMimeType() ?? '';
         if (str_contains($mime, 'spreadsheet') || str_contains($mime, 'excel')) {
             return $this->parseSpreadsheet($file->getRealPath());
@@ -123,7 +143,7 @@ class GuestImportService
     }
 
     /**
-     * @return list<array{name: string, phone_number: string, guest_type: string}>
+     * @return list<array{name: string, phone_number: string, guest_type: string, relation: string}>
      */
     protected function parseCsv(string $path): array
     {
@@ -139,7 +159,6 @@ class GuestImportService
             throw new RuntimeException('CSV is empty');
         }
 
-        // Strip UTF-8 BOM from first header cell if present
         if (isset($headerLine[0])) {
             $headerLine[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string) $headerLine[0]);
         }
@@ -149,15 +168,7 @@ class GuestImportService
 
         $rows = [];
         while (($row = fgetcsv($handle)) !== false) {
-            $rows[] = [
-                'name' => (string) ($row[$indexes['name']] ?? ''),
-                'phone_number' => $indexes['phone_number'] !== false
-                    ? (string) ($row[$indexes['phone_number']] ?? '')
-                    : '',
-                'guest_type' => $indexes['guest_type'] !== false
-                    ? (string) ($row[$indexes['guest_type']] ?? '')
-                    : '',
-            ];
+            $rows[] = $this->mapIndexedRow($row, $indexes);
         }
 
         fclose($handle);
@@ -166,7 +177,7 @@ class GuestImportService
     }
 
     /**
-     * @return list<array{name: string, phone_number: string, guest_type: string}>
+     * @return list<array{name: string, phone_number: string, guest_type: string, relation: string}>
      */
     protected function parseSpreadsheet(string $path): array
     {
@@ -187,23 +198,36 @@ class GuestImportService
 
         $rows = [];
         foreach ($data as $row) {
-            $rows[] = [
-                'name' => (string) ($row[$indexes['name']] ?? ''),
-                'phone_number' => $indexes['phone_number'] !== false
-                    ? (string) ($row[$indexes['phone_number']] ?? '')
-                    : '',
-                'guest_type' => $indexes['guest_type'] !== false
-                    ? (string) ($row[$indexes['guest_type']] ?? '')
-                    : '',
-            ];
+            $rows[] = $this->mapIndexedRow($row, $indexes);
         }
 
         return $rows;
     }
 
     /**
+     * @param  list<mixed>  $row
+     * @param  array{name: int, phone_number: int|false, guest_type: int|false, relation: int|false}  $indexes
+     * @return array{name: string, phone_number: string, guest_type: string, relation: string}
+     */
+    protected function mapIndexedRow(array $row, array $indexes): array
+    {
+        return [
+            'name' => (string) ($row[$indexes['name']] ?? ''),
+            'phone_number' => $indexes['phone_number'] !== false
+                ? (string) ($row[$indexes['phone_number']] ?? '')
+                : '',
+            'guest_type' => $indexes['guest_type'] !== false
+                ? (string) ($row[$indexes['guest_type']] ?? '')
+                : '',
+            'relation' => $indexes['relation'] !== false
+                ? (string) ($row[$indexes['relation']] ?? '')
+                : '',
+        ];
+    }
+
+    /**
      * @param  list<string>  $header
-     * @return array{name: int, phone_number: int|false, guest_type: int|false}
+     * @return array{name: int, phone_number: int|false, guest_type: int|false, relation: int|false}
      */
     protected function resolveColumnIndexes(array $header): array
     {
@@ -216,6 +240,7 @@ class GuestImportService
             'name' => $idxName,
             'phone_number' => array_search('phone_number', $header, true),
             'guest_type' => array_search('guest_type', $header, true),
+            'relation' => array_search('relation', $header, true),
         ];
     }
 
@@ -233,9 +258,10 @@ class GuestImportService
             $sheet->setCellValue([1, $rowIndex + 2], $sample['name']);
             $sheet->setCellValue([2, $rowIndex + 2], $sample['phone_number']);
             $sheet->setCellValue([3, $rowIndex + 2], $sample['guest_type']);
+            $sheet->setCellValue([4, $rowIndex + 2], $sample['relation']);
         }
 
-        foreach (range('A', 'C') as $column) {
+        foreach (range('A', 'D') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 

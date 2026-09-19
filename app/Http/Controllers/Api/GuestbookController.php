@@ -14,7 +14,7 @@ class GuestbookController extends Controller
     {
         abort_unless($request->user()?->canAccessEvent($event), 403);
 
-        $query = $event->guests()->orderBy('name');
+        $query = $event->guests()->with('relation')->orderBy('name');
 
         if ($request->filled('q')) {
             $q = trim((string) $request->query('q'));
@@ -28,7 +28,14 @@ class GuestbookController extends Controller
             $query->where('is_attended', false);
         }
 
-        $guests = $query->get(['id', 'name', 'guest_type', 'is_attended', 'scanned_at']);
+        $guests = $query->get([
+            'id',
+            'name',
+            'guest_type',
+            'guest_relation_id',
+            'is_attended',
+            'scanned_at',
+        ]);
 
         $total = $event->guests()->count();
         $attended = $event->guests()->where('is_attended', true)->count();
@@ -39,13 +46,7 @@ class GuestbookController extends Controller
                 'attended' => $attended,
                 'pending' => max(0, $total - $attended),
             ],
-            'data' => $guests->map(fn (Guest $guest) => [
-                'id' => $guest->id,
-                'name' => $guest->name,
-                'guest_type' => $guest->guest_type,
-                'is_attended' => (bool) $guest->is_attended,
-                'scanned_at' => $guest->scanned_at?->toIso8601String(),
-            ]),
+            'data' => $guests->map(fn (Guest $guest) => $this->guestPayload($guest)),
         ]);
     }
 
@@ -62,14 +63,10 @@ class GuestbookController extends Controller
             event(new GuestAttendanceUpdated($guest));
         }
 
+        $guest->loadMissing('relation');
+
         return response()->json([
-            'data' => [
-                'id' => $guest->id,
-                'name' => $guest->name,
-                'guest_type' => $guest->guest_type,
-                'is_attended' => true,
-                'scanned_at' => $guest->scanned_at?->toIso8601String(),
-            ],
+            'data' => $this->guestPayload($guest),
         ]);
     }
 
@@ -86,14 +83,27 @@ class GuestbookController extends Controller
             event(new GuestAttendanceUpdated($guest));
         }
 
+        $guest->loadMissing('relation');
+
         return response()->json([
-            'data' => [
-                'id' => $guest->id,
-                'name' => $guest->name,
-                'guest_type' => $guest->guest_type,
-                'is_attended' => false,
-                'scanned_at' => null,
-            ],
+            'data' => $this->guestPayload($guest),
         ]);
+    }
+
+    private function guestPayload(Guest $guest): array
+    {
+        return [
+            'id' => $guest->id,
+            'name' => $guest->name,
+            'guest_type' => $guest->guest_type,
+            'relation' => $guest->relation
+                ? [
+                    'id' => $guest->relation->id,
+                    'label' => $guest->relation->label,
+                ]
+                : null,
+            'is_attended' => (bool) $guest->is_attended,
+            'scanned_at' => $guest->scanned_at?->toIso8601String(),
+        ];
     }
 }

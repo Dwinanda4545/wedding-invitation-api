@@ -53,6 +53,11 @@ class Event extends Model
         return $this->hasMany(Guest::class);
     }
 
+    public function guestRelations()
+    {
+        return $this->hasMany(GuestRelation::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function schedules()
     {
         return $this->hasMany(EventSchedule::class)->orderBy('sort_order');
