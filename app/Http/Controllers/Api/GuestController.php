@@ -67,6 +67,23 @@ class GuestController extends Controller
         return response()->json(['message' => 'Deleted']);
     }
 
+    public function bulkDestroy(Request $request, Event $event)
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:500'],
+            'ids.*' => ['integer'],
+        ]);
+
+        $deleted = $event->guests()
+            ->whereIn('id', $data['ids'])
+            ->delete();
+
+        return response()->json([
+            'message' => 'Deleted',
+            'deleted' => $deleted,
+        ]);
+    }
+
     public function importTemplate(Request $request, GuestImportService $importer): StreamedResponse|\Illuminate\Http\JsonResponse
     {
         $format = strtolower((string) $request->query('format', 'xlsx'));
