@@ -11,8 +11,14 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
         commands: __DIR__.'/../routes/console.php',
-        channels: __DIR__.'/../routes/channels.php',
         health: '/up',
+    )
+    // Sanctum SPA: use api + auth:sanctum so EnsureFrontendRequestsAreStateful
+    // applies. Default web-only /broadcasting/auth can issue a new empty session
+    // cookie and look like "login broken" once Echo connects (guestbook/Pusher).
+    ->withBroadcasting(
+        __DIR__.'/../routes/channels.php',
+        ['middleware' => ['api', 'auth:sanctum']],
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Enable first-party SPA authentication via Sanctum cookies.

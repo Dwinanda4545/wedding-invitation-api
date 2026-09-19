@@ -244,6 +244,8 @@ Setelah ubah env API, hapus `bootstrap/cache/config.php` lewat File Manager lalu
 
 Cek cepat di browser DevTools → Network: request `POST .../broadcasting/auth` harus **200**, bukan CORS error / 403.
 
+**Login vs Pusher:** `BROADCAST_CONNECTION=pusher` tidak memproses login. Jika setelah mengisi Pusher Anda “tidak bisa login”, biasanya cookie session tertimpa saat Echo memanggil `/broadcasting/auth` (sudah diperbaiki ke middleware `api` + `auth:sanctum`). Pastikan saat edit `.env` Anda **tidak** mengubah `APP_KEY` / `SESSION_*` / `SANCTUM_*`, lalu hapus `bootstrap/cache/config.php`.
+
 ---
 
 ## Bagian F — FlowKirim WhatsApp (production)
