@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\InvitationSendUpdated;
 use App\Models\Event;
 use App\Models\Guest;
 use App\Models\InvitationSend;
@@ -9,6 +10,7 @@ use App\Models\User;
 use App\Models\WhatsappDevice;
 use App\Services\FlowkirimService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event as EventFacade;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -45,6 +47,8 @@ class InvitationWhatsappSendTest extends TestCase
 
     public function test_admin_can_send_invitation_to_one_guest(): void
     {
+        EventFacade::fake([InvitationSendUpdated::class]);
+
         Http::fake([
             'scan.flowkirim.com/api/whatsapp/messages/text' => Http::response([
                 'id' => 'msg-123',
@@ -80,6 +84,11 @@ class InvitationWhatsappSendTest extends TestCase
                 && $request['to'] === '6281234567890@s.whatsapp.net'
                 && $request['session_id'] === $device->provider_device_id
                 && str_contains($request['message'], 'Halo');
+        });
+
+        EventFacade::assertDispatched(InvitationSendUpdated::class, function (InvitationSendUpdated $event) use ($guest) {
+            return (int) $event->send->guest_id === (int) $guest->id
+                && $event->send->status === InvitationSend::STATUS_SENT;
         });
     }
 

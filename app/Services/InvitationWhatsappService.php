@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Events\InvitationSendUpdated;
 use App\Models\Event;
 use App\Models\Guest;
 use App\Models\InvitationSend;
@@ -256,8 +257,11 @@ class InvitationWhatsappService
             'sent_at' => now(),
         ])->save();
 
+        $fresh = $send->fresh();
+        event(new InvitationSendUpdated($fresh));
+
         return [
-            'send' => $send->fresh(),
+            'send' => $fresh,
             'guest_id' => $guest->id,
             'status' => InvitationSend::STATUS_SENT,
             'error_message' => null,
@@ -275,11 +279,14 @@ class InvitationWhatsappService
             'sent_at' => null,
         ])->save();
 
+        $fresh = $send->fresh();
+        event(new InvitationSendUpdated($fresh));
+
         return [
-            'send' => $send->fresh(),
+            'send' => $fresh,
             'guest_id' => (int) $send->guest_id,
             'status' => InvitationSend::STATUS_FAILED,
-            'error_message' => $send->error_message,
+            'error_message' => $fresh->error_message,
         ];
     }
 
