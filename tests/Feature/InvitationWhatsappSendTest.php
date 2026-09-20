@@ -247,6 +247,67 @@ class InvitationWhatsappSendTest extends TestCase
             ->assertJsonCount(1, 'data');
     }
 
+    public function test_invitation_send_summary_counts(): void
+    {
+        Http::fake([
+            'scan.flowkirim.com/api/whatsapp/messages/text' => Http::sequence()
+                ->push(['id' => 'ok'], 200)
+                ->push(['error' => 'fail'], 500),
+        ]);
+
+        $admin = User::factory()->admin()->create();
+        $device = WhatsappDevice::query()->create([
+            'name' => 'Main',
+            'provider_device_id' => 'provider-main',
+            'is_active' => true,
+        ]);
+        $event = Event::query()->create([
+            'name' => 'E',
+            'slug' => 'e-'.uniqid(),
+            'whatsapp_device_id' => $device->id,
+        ]);
+        $sentGuest = Guest::query()->create([
+            'event_id' => $event->id,
+            'name' => 'Sent',
+            'phone_number' => '081111111111',
+            'guest_type' => 'Regular',
+        ]);
+        $failedGuest = Guest::query()->create([
+            'event_id' => $event->id,
+            'name' => 'Failed',
+            'phone_number' => '082222222222',
+            'guest_type' => 'Regular',
+        ]);
+        Guest::query()->create([
+            'event_id' => $event->id,
+            'name' => 'Never',
+            'phone_number' => '083333333333',
+            'guest_type' => 'Regular',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson('/api/events/'.$event->id.'/guests/'.$sentGuest->id.'/send-invitation', [
+                'message' => 'Hi {nama}',
+            ])
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->postJson('/api/events/'.$event->id.'/guests/'.$failedGuest->id.'/send-invitation', [
+                'message' => 'Hi {nama}',
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($admin)
+            ->getJson('/api/events/'.$event->id.'/invitation-sends/summary')
+            ->assertOk()
+            ->assertJsonPath('data.guests_total', 3)
+            ->assertJsonPath('data.never_sent', 1)
+            ->assertJsonPath('data.latest_sent', 1)
+            ->assertJsonPath('data.latest_failed', 1)
+            ->assertJsonPath('data.attempts_sent', 1)
+            ->assertJsonPath('data.attempts_failed', 1);
+    }
+
     public function test_panitia_cannot_send_invitation(): void
     {
         $panitia = User::factory()->panitia()->create();

@@ -71,6 +71,52 @@ class InvitationSendController extends Controller
         ]);
     }
 
+    public function summary(Event $event)
+    {
+        $guestsTotal = $event->guests()->count();
+
+        $latestIds = InvitationSend::query()
+            ->selectRaw('MAX(id) as id')
+            ->where('event_id', $event->id)
+            ->groupBy('guest_id')
+            ->pluck('id');
+
+        $latestSent = 0;
+        $latestFailed = 0;
+        $latestPending = 0;
+
+        if ($latestIds->isNotEmpty()) {
+            $latestCounts = InvitationSend::query()
+                ->whereIn('id', $latestIds)
+                ->selectRaw('status, COUNT(*) as aggregate')
+                ->groupBy('status')
+                ->pluck('aggregate', 'status');
+
+            $latestSent = (int) ($latestCounts[InvitationSend::STATUS_SENT] ?? 0);
+            $latestFailed = (int) ($latestCounts[InvitationSend::STATUS_FAILED] ?? 0);
+            $latestPending = (int) ($latestCounts[InvitationSend::STATUS_PENDING] ?? 0);
+        }
+
+        $attemptCounts = InvitationSend::query()
+            ->where('event_id', $event->id)
+            ->selectRaw('status, COUNT(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status');
+
+        return response()->json([
+            'data' => [
+                'guests_total' => $guestsTotal,
+                'never_sent' => max(0, $guestsTotal - $latestIds->count()),
+                'latest_sent' => $latestSent,
+                'latest_failed' => $latestFailed,
+                'latest_pending' => $latestPending,
+                'attempts_sent' => (int) ($attemptCounts[InvitationSend::STATUS_SENT] ?? 0),
+                'attempts_failed' => (int) ($attemptCounts[InvitationSend::STATUS_FAILED] ?? 0),
+                'attempts_pending' => (int) ($attemptCounts[InvitationSend::STATUS_PENDING] ?? 0),
+            ],
+        ]);
+    }
+
     public function indexForEvent(Request $request, Event $event)
     {
         $query = $event->invitationSends()->with([

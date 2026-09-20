@@ -107,6 +107,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/events/{event}/guests/import', [GuestController::class, 'import']);
         Route::post('/events/{event}/guests/bulk-delete', [GuestController::class, 'bulkDestroy']);
         Route::post('/events/{event}/guests/send-invitations', [InvitationSendController::class, 'sendBulk']);
+        Route::get('/events/{event}/invitation-sends/summary', [InvitationSendController::class, 'summary']);
         Route::get('/events/{event}/invitation-sends', [InvitationSendController::class, 'indexForEvent']);
 
         Route::get('/events/{event}/guest-relations', [GuestRelationController::class, 'index']);
