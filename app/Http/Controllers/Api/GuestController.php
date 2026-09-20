@@ -8,6 +8,7 @@ use App\Http\Requests\GuestStoreRequest;
 use App\Http\Requests\GuestUpdateRequest;
 use App\Models\Event;
 use App\Models\Guest;
+use App\Services\GuestExportService;
 use App\Services\GuestImportService;
 use App\Services\GuestQrCodeService;
 use Illuminate\Http\Request;
@@ -94,6 +95,15 @@ class GuestController extends Controller
 
         try {
             return $importer->downloadTemplate($format);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function export(Event $event, GuestExportService $exporter): StreamedResponse|\Illuminate\Http\JsonResponse
+    {
+        try {
+            return $exporter->download($event);
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
