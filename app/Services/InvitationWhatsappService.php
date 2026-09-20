@@ -124,7 +124,13 @@ class InvitationWhatsappService
     }
 
     /**
-     * Force LTR paragraph direction so Arabic openings do not flip the WhatsApp bubble to RTL.
+     * Force LTR bubble alignment for mixed Arabic+Latin templates.
+     *
+     * A single leading LRM is enough on many Android clients, but iPhone and
+     * WhatsApp Web/Desktop re-evaluate direction per paragraph from the first
+     * strong character (Arabic). We:
+     * 1) prefix every non-empty line with LRM (U+200E)
+     * 2) wrap the whole body in LRE…PDF (U+202A … U+202C)
      */
     public function applyTextDirection(string $message): string
     {
@@ -133,12 +139,42 @@ class InvitationWhatsappService
         }
 
         $lrm = "\u{200E}";
+        $lre = "\u{202A}";
+        $pdf = "\u{202C}";
 
-        if (str_starts_with($message, $lrm)) {
-            return $message;
+        $message = $this->stripDirectionMarks($message);
+
+        $lines = preg_split("/\r\n|\n|\r/", $message);
+        if ($lines === false) {
+            $lines = [$message];
         }
 
-        return $lrm.$message;
+        $lines = array_map(static function (string $line) use ($lrm): string {
+            if ($line === '' || str_starts_with($line, $lrm)) {
+                return $line;
+            }
+
+            return $lrm.$line;
+        }, $lines);
+
+        return $lre.implode("\n", $lines).$pdf;
+    }
+
+    /**
+     * Remove marks previously injected by applyTextDirection (idempotent re-apply).
+     */
+    private function stripDirectionMarks(string $message): string
+    {
+        if (str_starts_with($message, "\u{202A}")) {
+            $message = substr($message, strlen("\u{202A}"));
+        }
+
+        if (str_ends_with($message, "\u{202C}")) {
+            $message = substr($message, 0, -strlen("\u{202C}"));
+        }
+
+        // Drop LRM only at line starts (marks we inject), keep any mid-line content intact.
+        return preg_replace("/(^|\n)\u{200E}/u", '$1', $message) ?? $message;
     }
 
     /**

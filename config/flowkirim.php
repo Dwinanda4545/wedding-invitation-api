@@ -12,6 +12,6 @@ return [
     // Append WhatsApp JID suffix when sending (docs show 628…@s.whatsapp.net).
     'append_jid_suffix' => filter_var(env('FLOWKIRIM_APPEND_JID_SUFFIX', true), FILTER_VALIDATE_BOOL),
     'link_preview' => filter_var(env('FLOWKIRIM_LINK_PREVIEW', true), FILTER_VALIDATE_BOOL),
-    // Prepend Unicode LRM so mixed Arabic+Latin templates stay left-aligned in WhatsApp.
+    // Force LTR on Android + iPhone + WhatsApp Web (per-line LRM + LRE/PDF wrap).
     'force_ltr' => filter_var(env('FLOWKIRIM_FORCE_LTR', true), FILTER_VALIDATE_BOOL),
 ];

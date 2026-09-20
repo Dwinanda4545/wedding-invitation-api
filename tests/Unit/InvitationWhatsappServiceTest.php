@@ -38,7 +38,7 @@ class InvitationWhatsappServiceTest extends TestCase
 
         $this->assertStringContainsString('https://undangan.example.com/invitation/abc123token', $message);
         $this->assertMatchesRegularExpression(
-            '/\n\nhttps:\/\/undangan\.example\.com\/invitation\/abc123token\n\n/',
+            '/\n\n\x{200E}?https:\/\/undangan\.example\.com\/invitation\/abc123token\n\n/u',
             $message,
         );
     }
@@ -62,9 +62,25 @@ class InvitationWhatsappServiceTest extends TestCase
             $guest,
         );
 
-        $this->assertSame("\u{200E}", mb_substr($message, 0, 1));
+        $this->assertSame("\u{202A}", mb_substr($message, 0, 1));
+        $this->assertSame("\u{202C}", mb_substr($message, -1));
+        $this->assertStringContainsString("\u{200E}".$arabic, $message);
+        $this->assertStringContainsString("\u{200E}Halo Budi", $message);
         $this->assertStringContainsString($arabic, $message);
         $this->assertStringContainsString('Halo Budi', $message);
+    }
+
+    public function test_apply_text_direction_is_idempotent(): void
+    {
+        config(['flowkirim.force_ltr' => true]);
+
+        $service = new InvitationWhatsappService(app(FlowkirimService::class));
+        $once = $service->applyTextDirection("بسم الله\nHalo");
+        $twice = $service->applyTextDirection($once);
+
+        $this->assertSame($once, $twice);
+        $this->assertSame(1, substr_count($twice, "\u{202A}"));
+        $this->assertSame(1, substr_count($twice, "\u{202C}"));
     }
 
     public function test_render_message_skips_lrm_when_force_ltr_disabled(): void
@@ -86,6 +102,7 @@ class InvitationWhatsappServiceTest extends TestCase
         );
 
         $this->assertFalse(str_starts_with($message, "\u{200E}"));
+        $this->assertFalse(str_starts_with($message, "\u{202A}"));
         $this->assertStringStartsWith('بسم الله', $message);
     }
 }
