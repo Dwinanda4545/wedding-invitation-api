@@ -118,7 +118,27 @@ class InvitationWhatsappService
             $template,
         );
 
-        return $this->ensureLinkIsStandalone($message, $link);
+        $message = $this->ensureLinkIsStandalone($message, $link);
+
+        return $this->applyTextDirection($message);
+    }
+
+    /**
+     * Force LTR paragraph direction so Arabic openings do not flip the WhatsApp bubble to RTL.
+     */
+    public function applyTextDirection(string $message): string
+    {
+        if (! config('flowkirim.force_ltr', true)) {
+            return $message;
+        }
+
+        $lrm = "\u{200E}";
+
+        if (str_starts_with($message, $lrm)) {
+            return $message;
+        }
+
+        return $lrm.$message;
     }
 
     /**

@@ -42,4 +42,50 @@ class InvitationWhatsappServiceTest extends TestCase
             $message,
         );
     }
+
+    public function test_render_message_prefixes_lrm_when_force_ltr_enabled(): void
+    {
+        config([
+            'app.frontend_url' => 'https://undangan.example.com',
+            'flowkirim.force_ltr' => true,
+        ]);
+
+        $guest = new Guest([
+            'name' => 'Budi',
+            'secret_token' => 'abc123token',
+        ]);
+
+        $service = new InvitationWhatsappService(app(FlowkirimService::class));
+        $arabic = 'بسم الله الرحمن الرحيم';
+        $message = $service->renderMessage(
+            $arabic."\n\nHalo {nama}\n{link}",
+            $guest,
+        );
+
+        $this->assertSame("\u{200E}", mb_substr($message, 0, 1));
+        $this->assertStringContainsString($arabic, $message);
+        $this->assertStringContainsString('Halo Budi', $message);
+    }
+
+    public function test_render_message_skips_lrm_when_force_ltr_disabled(): void
+    {
+        config([
+            'app.frontend_url' => 'https://undangan.example.com',
+            'flowkirim.force_ltr' => false,
+        ]);
+
+        $guest = new Guest([
+            'name' => 'Budi',
+            'secret_token' => 'abc123token',
+        ]);
+
+        $service = new InvitationWhatsappService(app(FlowkirimService::class));
+        $message = $service->renderMessage(
+            "بسم الله\nHalo {nama} {link}",
+            $guest,
+        );
+
+        $this->assertFalse(str_starts_with($message, "\u{200E}"));
+        $this->assertStringStartsWith('بسم الله', $message);
+    }
 }

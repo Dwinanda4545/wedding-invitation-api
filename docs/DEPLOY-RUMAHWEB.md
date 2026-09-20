@@ -206,6 +206,7 @@ https://api.wedding-invitation.sanadwi.my.id/api/doku/notification
 | WA: Could not resolve host api.flowkirim.com | Set `FLOWKIRIM_BASE_URL=https://scan.flowkirim.com` |
 | WA: Forbidden device/pool | `session_id` di WA Devices salah / bukan milik akun token |
 | Link WA tidak hyperlink | `FRONTEND_URL` harus `https://...` publik, bukan localhost |
+| WA: teks Indonesia rata kanan setelah aksara Arab | Set `FLOWKIRIM_FORCE_LTR=true` lalu clear config cache |
 
 ---
 
@@ -259,6 +260,7 @@ FLOWKIRIM_SEND_PATH=/api/whatsapp/messages/text
 FLOWKIRIM_DEVICE_FIELD=session_id
 FLOWKIRIM_APPEND_JID_SUFFIX=true
 FLOWKIRIM_LINK_PREVIEW=true
+FLOWKIRIM_FORCE_LTR=true
 FRONTEND_URL=https://wedding-invitation.sanadwi.my.id
 ```
 
