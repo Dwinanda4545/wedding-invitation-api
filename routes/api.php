@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\DokuNotificationController;
 use App\Http\Controllers\Api\DigitalEnvelopeController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\EventEnvelopeController;
+use App\Http\Controllers\Api\EventWishController;
 use App\Http\Controllers\Api\EventDecorController;
 use App\Http\Controllers\Api\EventGalleryController;
 use App\Http\Controllers\Api\EventInvitationController;
@@ -105,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/events/{event}/decor/{filename}', [EventDecorController::class, 'destroy']);
 
         Route::get('/events/{event}/envelope-transactions', [EventEnvelopeController::class, 'index']);
+        Route::get('/events/{event}/wishes', [EventWishController::class, 'index']);
 
         Route::get('/events/{event}/guests', [GuestController::class, 'index']);
         Route::post('/events/{event}/guests', [GuestController::class, 'store']);
