@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DigitalEnvelopeStoreRequest;
 use App\Models\EnvelopeTransaction;
-use App\Models\Event;
 use App\Models\Guest;
+use App\Models\UniversalInvitation;
 use App\Services\DokuService;
 use App\Support\EnvelopeSettings;
 use Illuminate\Http\JsonResponse;
@@ -79,11 +79,13 @@ class DigitalEnvelopeController extends Controller
 
     public function storeOpen(DigitalEnvelopeStoreRequest $request, string $token): JsonResponse
     {
-        $event = Event::findEnabledUniversal($token);
+        $open = UniversalInvitation::findEnabledByToken($token);
 
-        if (! $event) {
+        if (! $open || ! $open->event) {
             return response()->json(['message' => 'Invitation not found'], 404);
         }
+
+        $event = $open->event;
 
         $envelopeSettings = EnvelopeSettings::fromEvent($event);
 

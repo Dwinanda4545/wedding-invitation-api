@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Event;
 use App\Models\Guest;
 use App\Models\InvitationWish;
+use App\Models\UniversalInvitation;
 use Illuminate\Support\Facades\Storage;
 
 class InvitationController extends Controller
@@ -48,12 +49,13 @@ class InvitationController extends Controller
 
     public function showOpen(string $token)
     {
-        $event = Event::findEnabledUniversal($token);
+        $open = UniversalInvitation::findEnabledByToken($token);
 
-        if (! $event) {
+        if (! $open || ! $open->event) {
             return response()->json(['message' => 'Invitation not found'], 404);
         }
 
+        $event = $open->event;
         $event->load([
             'schedules',
             'loveStories',
@@ -61,7 +63,7 @@ class InvitationController extends Controller
             'wishes' => fn ($q) => $q->latest()->limit(30),
         ]);
 
-        $greeting = $event->universal_greeting ?: Event::DEFAULT_UNIVERSAL_GREETING;
+        $greeting = $open->resolvedGreeting();
 
         return response()->json([
             'is_universal' => true,

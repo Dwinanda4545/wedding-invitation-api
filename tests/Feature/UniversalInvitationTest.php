@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\EnvelopeTransaction;
 use App\Models\Event;
 use App\Models\InvitationWish;
+use App\Models\UniversalInvitation;
 use App\Models\User;
 use App\Services\DokuService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -14,15 +15,25 @@ class UniversalInvitationTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function openInvite(Event $event, array $attrs = []): UniversalInvitation
+    {
+        return UniversalInvitation::query()->create(array_merge([
+            'event_id' => $event->id,
+            'name' => 'Grup Keluarga A',
+            'greeting' => 'Yth. Bapak/Ibu/Saudara/i',
+            'token' => 'opentokenabc',
+            'enabled' => true,
+            'sort_order' => 0,
+        ], $attrs));
+    }
+
     public function test_open_invitation_returns_greeting_without_qr(): void
     {
         $event = Event::query()->create([
             'name' => 'Raka & Sinta',
             'slug' => 'raka-sinta-'.uniqid(),
-            'universal_invitation_token' => 'opentokenabc',
-            'universal_invitation_enabled' => true,
-            'universal_greeting' => 'Yth. Bapak/Ibu/Saudara/i',
         ]);
+        $this->openInvite($event);
 
         $this->getJson('/api/invitation/open/opentokenabc')
             ->assertOk()
@@ -35,11 +46,13 @@ class UniversalInvitationTest extends TestCase
 
     public function test_disabled_open_token_is_404(): void
     {
-        Event::query()->create([
+        $event = Event::query()->create([
             'name' => 'Raka & Sinta',
             'slug' => 'raka-sinta-'.uniqid(),
-            'universal_invitation_token' => 'opentokenoff',
-            'universal_invitation_enabled' => false,
+        ]);
+        $this->openInvite($event, [
+            'token' => 'opentokenoff',
+            'enabled' => false,
         ]);
 
         $this->getJson('/api/invitation/open/opentokenoff')->assertNotFound();
@@ -47,12 +60,11 @@ class UniversalInvitationTest extends TestCase
 
     public function test_open_link_can_store_many_wishes_without_guest(): void
     {
-        Event::query()->create([
+        $event = Event::query()->create([
             'name' => 'Raka & Sinta',
             'slug' => 'raka-sinta-'.uniqid(),
-            'universal_invitation_token' => 'opentokenwish',
-            'universal_invitation_enabled' => true,
         ]);
+        $this->openInvite($event, ['token' => 'opentokenwish']);
 
         $this->postJson('/api/invitation/open/opentokenwish/wishes', [
             'guest_name' => 'Andi',
@@ -70,15 +82,14 @@ class UniversalInvitationTest extends TestCase
 
     public function test_open_link_can_create_envelope_without_guest(): void
     {
-        Event::query()->create([
+        $event = Event::query()->create([
             'name' => 'Raka & Sinta',
             'slug' => 'raka-sinta-'.uniqid(),
-            'universal_invitation_token' => 'opentokenabc',
-            'universal_invitation_enabled' => true,
             'invitation_settings' => [
                 'sections' => ['digital_envelope' => true],
             ],
         ]);
+        $this->openInvite($event);
 
         $this->mock(DokuService::class, function ($mock) {
             $mock->shouldReceive('createTransaction')
@@ -98,7 +109,7 @@ class UniversalInvitationTest extends TestCase
         );
     }
 
-    public function test_admin_can_enable_and_regenerate_universal_link(): void
+    public function test_admin_can_manage_multiple_universal_invitations(): void
     {
         config(['app.frontend_url' => 'http://localhost:5173']);
 
@@ -108,28 +119,51 @@ class UniversalInvitationTest extends TestCase
             'slug' => 'raka-sinta-'.uniqid(),
         ]);
 
-        $enabled = $this->actingAs($admin)
-            ->putJson('/api/events/'.$event->id.'/invitation', [
-                'universal_invitation_enabled' => true,
-                'universal_greeting' => 'Yth. Keluarga',
+        $created = $this->actingAs($admin)
+            ->postJson('/api/events/'.$event->id.'/universal-invitations', [
+                'name' => 'Grup Keluarga A',
+                'greeting' => 'Yth. Keluarga A',
             ])
-            ->assertOk()
-            ->assertJsonPath('data.universal_invitation_enabled', true)
-            ->assertJsonPath('data.universal_greeting', 'Yth. Keluarga');
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'Grup Keluarga A')
+            ->assertJsonPath('data.greeting', 'Yth. Keluarga A');
 
-        $url = $enabled->json('data.universal_invitation_url');
-        $this->assertIsString($url);
+        $url = $created->json('data.url');
         $this->assertStringContainsString('/invitation/open/', $url);
-
+        $id = $created->json('data.id');
         $token = basename((string) parse_url($url, PHP_URL_PATH));
-        $this->getJson('/api/invitation/open/'.$token)->assertOk();
+
+        $this->getJson('/api/invitation/open/'.$token)
+            ->assertOk()
+            ->assertJsonPath('greeting', 'Yth. Keluarga A');
+
+        $this->actingAs($admin)
+            ->postJson('/api/events/'.$event->id.'/universal-invitations', [
+                'name' => 'Grup Keluarga B',
+                'greeting' => 'Yth. Keluarga B',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($admin)
+            ->getJson('/api/events/'.$event->id.'/universal-invitations')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
 
         $regenerated = $this->actingAs($admin)
-            ->postJson('/api/events/'.$event->id.'/universal-invitation/regenerate')
+            ->postJson('/api/events/'.$event->id.'/universal-invitations/'.$id.'/regenerate')
             ->assertOk();
 
-        $newUrl = $regenerated->json('data.universal_invitation_url');
+        $newUrl = $regenerated->json('data.url');
         $this->assertNotSame($url, $newUrl);
         $this->getJson('/api/invitation/open/'.$token)->assertNotFound();
+
+        $this->actingAs($admin)
+            ->patchJson('/api/events/'.$event->id.'/universal-invitations/'.$id, [
+                'enabled' => false,
+            ])
+            ->assertOk();
+
+        $newToken = basename((string) parse_url($newUrl, PHP_URL_PATH));
+        $this->getJson('/api/invitation/open/'.$newToken)->assertNotFound();
     }
 }

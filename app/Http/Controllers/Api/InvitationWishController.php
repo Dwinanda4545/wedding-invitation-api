@@ -5,9 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\InvitationWishStoreRequest;
 use App\Http\Requests\InvitationWishUpdateRequest;
-use App\Models\Event;
 use App\Models\Guest;
 use App\Models\InvitationWish;
+use App\Models\UniversalInvitation;
 
 class InvitationWishController extends Controller
 {
@@ -50,11 +50,13 @@ class InvitationWishController extends Controller
 
     public function storeOpen(InvitationWishStoreRequest $request, string $token)
     {
-        $event = Event::findEnabledUniversal($token);
+        $open = UniversalInvitation::findEnabledByToken($token);
 
-        if (! $event) {
+        if (! $open || ! $open->event) {
             return response()->json(['message' => 'Invitation not found'], 404);
         }
+
+        $event = $open->event;
 
         if (! filled($request->input('guest_name'))) {
             return response()->json([

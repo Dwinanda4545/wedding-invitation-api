@@ -28,8 +28,6 @@ class EventInvitationUpdateRequest extends FormRequest
             'hosts' => ['sometimes', 'nullable', 'array'],
             'hosts.groom_side' => ['sometimes', 'nullable', 'array'],
             'hosts.bride_side' => ['sometimes', 'nullable', 'array'],
-            'universal_invitation_enabled' => ['sometimes', 'boolean'],
-            'universal_greeting' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
     }
 

@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\EventInvitationUpdateRequest;
 use App\Models\Event;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class EventInvitationController extends Controller
 {
@@ -25,7 +24,6 @@ class EventInvitationController extends Controller
     public function update(EventInvitationUpdateRequest $request, Event $event)
     {
         $event->update($request->validated());
-        $this->ensureUniversalToken($event);
 
         return response()->json([
             'data' => $this->payload($event->fresh()->load([
@@ -34,32 +32,6 @@ class EventInvitationController extends Controller
                 'galleryImages',
             ])),
         ]);
-    }
-
-    public function regenerateUniversal(Event $event)
-    {
-        $event->forceFill([
-            'universal_invitation_token' => Str::random(64),
-        ])->save();
-
-        return response()->json([
-            'data' => $this->payload($event->fresh()->load([
-                'schedules',
-                'loveStories',
-                'galleryImages',
-            ])),
-        ]);
-    }
-
-    private function ensureUniversalToken(Event $event): void
-    {
-        $event->refresh();
-
-        if ($event->universal_invitation_enabled && ! $event->universal_invitation_token) {
-            $event->forceFill([
-                'universal_invitation_token' => Str::random(64),
-            ])->save();
-        }
     }
 
     protected function payload(Event $event): array
@@ -76,11 +48,6 @@ class EventInvitationController extends Controller
             'couple_info' => $event->couple_info,
             'invitation_settings' => $event->invitation_settings,
             'hosts' => $event->hosts,
-            'universal_invitation_enabled' => (bool) $event->universal_invitation_enabled,
-            'universal_greeting' => $event->universal_greeting,
-            'universal_invitation_url' => $event->universal_invitation_token
-                ? rtrim((string) config('app.frontend_url'), '/').'/invitation/open/'.$event->universal_invitation_token
-                : null,
             'schedules' => $event->schedules->map(fn ($s) => [
                 'id' => $s->id,
                 'title' => $s->title,

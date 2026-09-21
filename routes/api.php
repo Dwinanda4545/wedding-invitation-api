@@ -20,7 +20,7 @@ use App\Http\Controllers\Api\InvitationSendController;
 use App\Http\Controllers\Api\InvitationThemeController;
 use App\Http\Controllers\Api\InvitationWishController;
 use App\Http\Controllers\Api\LoveStoryController;
-use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\UniversalInvitationController;
 use App\Http\Controllers\Api\WhatsappDeviceController;
 use Illuminate\Support\Facades\Route;
 
@@ -78,7 +78,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/events/{event}/invitation', [EventInvitationController::class, 'show']);
         Route::put('/events/{event}/invitation', [EventInvitationController::class, 'update']);
         Route::patch('/events/{event}/invitation', [EventInvitationController::class, 'update']);
-        Route::post('/events/{event}/universal-invitation/regenerate', [EventInvitationController::class, 'regenerateUniversal']);
+
+        Route::get('/events/{event}/universal-invitations', [UniversalInvitationController::class, 'index']);
+        Route::post('/events/{event}/universal-invitations', [UniversalInvitationController::class, 'store']);
+        Route::put('/events/{event}/universal-invitations/{universalInvitation}', [UniversalInvitationController::class, 'update']);
+        Route::patch('/events/{event}/universal-invitations/{universalInvitation}', [UniversalInvitationController::class, 'update']);
+        Route::delete('/events/{event}/universal-invitations/{universalInvitation}', [UniversalInvitationController::class, 'destroy']);
+        Route::post('/events/{event}/universal-invitations/{universalInvitation}/regenerate', [UniversalInvitationController::class, 'regenerate']);
 
         Route::post('/events/{event}/schedules', [EventScheduleController::class, 'store']);
         Route::put('/events/{event}/schedules/{schedule}', [EventScheduleController::class, 'update']);

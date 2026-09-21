@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Event;
 use App\Models\Guest;
+use App\Models\UniversalInvitation;
 use App\Support\EnvelopeSettings;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -25,7 +25,7 @@ class DigitalEnvelopeStoreRequest extends FormRequest
                 ->first()
                 ?->event;
         } elseif ($this->route('token')) {
-            $event = Event::findEnabledUniversal((string) $this->route('token'));
+            $event = UniversalInvitation::findEnabledByToken((string) $this->route('token'))?->event;
         }
 
         $settings = $event
