@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\InvitationThemeController;
 use App\Http\Controllers\Api\InvitationWishController;
 use App\Http\Controllers\Api\LoveStoryController;
 use App\Http\Controllers\Api\UniversalInvitationController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WhatsappDeviceController;
 use Illuminate\Support\Facades\Route;
 
