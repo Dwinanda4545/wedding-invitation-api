@@ -366,6 +366,114 @@ class DigitalEnvelopeTest extends TestCase
             ->assertJsonCount(2, 'data');
     }
 
+    public function test_admin_can_list_all_envelope_transactions(): void
+    {
+        Http::fake([
+            '*/orders/v1/status/*' => Http::response([
+                'transaction' => ['status' => 'PENDING'],
+            ], 200),
+        ]);
+
+        ['event' => $event, 'guest' => $guest] = $this->enabledGuest();
+        $user = User::factory()->create();
+
+        for ($i = 1; $i <= 25; $i++) {
+            EnvelopeTransaction::query()->create([
+                'event_id' => $event->id,
+                'guest_id' => $guest->id,
+                'sender_name' => "Tamu {$i}",
+                'amount' => 10000 * $i,
+                'order_id' => "ENV-1-BULK-{$i}",
+                'status' => 'paid',
+                'paid_at' => now(),
+            ]);
+        }
+
+        // Default pagination limits to 20
+        $this->actingAs($user)
+            ->getJson("/api/events/{$event->id}/envelope-transactions")
+            ->assertOk()
+            ->assertJsonCount(20, 'data')
+            ->assertJsonPath('meta.total', 25);
+
+        // With all=1, returns all 25
+        $this->actingAs($user)
+            ->getJson("/api/events/{$event->id}/envelope-transactions?all=1")
+            ->assertOk()
+            ->assertJsonCount(25, 'data')
+            ->assertJsonPath('meta.total', 25);
+    }
+
+    public function test_admin_can_filter_envelope_transactions_by_relation(): void
+    {
+        Http::fake([
+            '*/orders/v1/status/*' => Http::response([
+                'transaction' => ['status' => 'PENDING'],
+            ], 200),
+        ]);
+
+        ['event' => $event, 'guest' => $guest] = $this->enabledGuest();
+        $user = User::factory()->create();
+
+        $relationKeluarga = $event->guestRelations()->create(['label' => 'Keluarga', 'sort_order' => 1]);
+        $relationTeman = $event->guestRelations()->create(['label' => 'Teman', 'sort_order' => 2]);
+
+        $guest->update(['guest_relation_id' => $relationKeluarga->id]);
+
+        $guestTeman = $event->guests()->create([
+            'name' => 'Teman Andi',
+            'guest_type' => 'regular',
+            'guest_relation_id' => $relationTeman->id,
+        ]);
+
+        EnvelopeTransaction::query()->create([
+            'event_id' => $event->id,
+            'guest_id' => $guest->id,
+            'sender_name' => 'Budi Keluarga',
+            'amount' => 100000,
+            'order_id' => 'ENV-1-REL-1',
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        EnvelopeTransaction::query()->create([
+            'event_id' => $event->id,
+            'guest_id' => $guestTeman->id,
+            'sender_name' => 'Andi Teman',
+            'amount' => 50000,
+            'order_id' => 'ENV-1-REL-2',
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        EnvelopeTransaction::query()->create([
+            'event_id' => $event->id,
+            'guest_id' => null,
+            'sender_name' => 'Tamu Umum',
+            'amount' => 20000,
+            'order_id' => 'ENV-1-REL-3',
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        // Filter by Keluarga
+        $this->actingAs($user)
+            ->getJson("/api/events/{$event->id}/envelope-transactions?relation_id={$relationKeluarga->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.sender_name', 'Budi Keluarga')
+            ->assertJsonPath('data.0.relation.label', 'Keluarga')
+            ->assertJsonPath('summary.total_paid_amount', 100000);
+
+        // Filter by none (umum / no relation)
+        $this->actingAs($user)
+            ->getJson("/api/events/{$event->id}/envelope-transactions?relation_id=none")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.sender_name', 'Tamu Umum')
+            ->assertJsonPath('summary.total_paid_amount', 20000);
+    }
+
     public function test_public_invitation_excludes_envelope_transactions(): void
     {
         ['event' => $event, 'guest' => $guest] = $this->enabledGuest();
